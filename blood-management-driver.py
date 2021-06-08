@@ -1,8 +1,9 @@
+import numpy as np
 from copy import deepcopy
 from simulator.simulator import Simulator
 from policies.myopic import Myopic
 from policies.adp import ADP
-
+from utils import load_params
 
 policies = {
     "myopic": Myopic,
@@ -33,23 +34,27 @@ def policy_evaluation(policy, replicas):
 
 
 if __name__ == "__main__":
-    params = {
+    args = {
         "policies": ["myopic", "adp"],
-        "seed": 234,
-        "epochs": 50,
+        "train_seed": 9874,
+        "test_seed": 7383,
         "train_simulations": 100,
         "test_simulations": 100,
         "baseline_gap": False
     }
 
-    # Simulation replicas (for fare comparison)
-    replicas = [Simulator(index, params) for index in range(params["test_simulations"])]
-    for policy_name in params["policies"]:
-        print(policy_name)
-        policy = policies[policy_name](params)
-        if policy.require_training:
-            policy.train()
+    params = load_params()
 
-        avg_reward, avg_gap = policy_evaluation(policy, deepcopy(replicas))
+    # Simulation replicas (for fare comparison)
+    train_generator = np.random.RandomState(seed=args['train_seed'])    # Move into policy.train()?
+    test_generator = np.random.RandomState(seed=args['test_seed'])
+    test_replicas = [Simulator(index, test_generator, args) for index in range(args["test_simulations"])]
+    for policy_name in args["policies"]:
+        print(policy_name)
+        policy = policies[policy_name](args)
+        if policy.require_training:
+            policy.train(train_generator)
+
+        avg_reward, avg_gap = policy_evaluation(policy, deepcopy(test_replicas))
 
 
