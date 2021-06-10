@@ -72,7 +72,7 @@ def load_params():
 
     params["max_age"] = 3
     params['surgery_types'] = ['urgent', 'elective']
-    params['substitution'] = True
+    params['substitution'] = [True]
 
     # Set here one step contribution function parameters  - BONUSES and PENALTIES
     params["rewards"] = {}
@@ -87,6 +87,12 @@ def load_params():
     params['demand_means'] = get_demand_means(params["blood_types"], default_value)
     params['donation_means'] = get_donation_means(params["blood_types"], default_value)
 
+    # The default weights to split the demand of a blood type is equal weights. The only requirement is that each
+    # weight is positive and they add up to 1.
+    # Default
+    params['surgery_types_prop'] = {k: 1 / len(params['surgery_types']) for k in params['surgery_types']}
+    params['substitution_prop'] = {k: 1 / len(params['substitution']) for k in params['substitution']}
+
     # Set here random surge parameters
     # params['time_periods_surge'] = set([4,8,10,12,14])
     params['time_periods_surge'] = set([i for i in range(1, params["epochs"]) if divmod(i, 3)[1] == 0])
@@ -94,5 +100,11 @@ def load_params():
     params['surge_factor'] = 6  # The surge demand is always going to be poisson with mean SURGE_FACTOR*demand_means, even if the regular demand distribution is Uniform
     params['surgery_types_prop']['urgent'] = 1 / 2
     params['surgery_types_prop']['elective'] = 1 - params['surgery_types_prop']['urgent']
+
+    # Set here the weights for each substitution type (if different than the default)
+    params['substitution_prop'][True] = 1
+    # params['substitution_prop'][False] = 1 - params['substitution_prop'][True]
+
     # Move to simulation class
     #params['blood_inventory'] = None
+    return params
