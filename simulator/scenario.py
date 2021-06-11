@@ -47,8 +47,8 @@ class Scenario(object):
         return [{i: int(self.rnd_generator.poisson(self.donation_means[i])) for i in self.blood_types} for _ in range(epochs)]
 
     def generate_init_blood_inventory(self):
-        multiplier = {age: .9 if age == '0' else (0.1 / (self.max_blood_age - 1)) for age in range(self.max_blood_age)}
-        return {(blood_type, age): int(np.random.poisson(self.donation_means[blood_type]) * multiplier[age])
+        multiplier = {age: .9 if age == 0 else (0.1 / (self.max_blood_age - 1)) for age in range(self.max_blood_age)}
+        return {(blood_type, age): int(self.rnd_generator.poisson(self.donation_means[blood_type]) * multiplier[age])
                 for blood_type, age in self.blood_groups}
 
     def perfect_information_solution(self):

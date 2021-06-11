@@ -2,34 +2,46 @@ import numpy as np
 from copy import deepcopy
 from simulator.scenario import Scenario
 from simulator.state import State
+from policies.policy import Policy
 from policies.myopic import Myopic
 from policies.adp import ADP
+from policies.basic import Basic
 from utils import load_params
 
 policies = {
+    "basic": Basic,
     "myopic": Myopic,
     "adp": ADP
 }
 
 
-def run_simulation(scenario: Scenario, active_policy):
+def compute_reward(decisions):
+    return 0
+
+
+def run_simulation(scenario: Scenario, active_policy: Policy):
     simulation_history = []
+    policy_reward = []
     #ToDo: Generate state
     epoch = 0
     replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
     while epoch < scenario.epochs - 1:  # Terminal test
-        decisions = active_policy.get_action(replica_state)
+        decisions = active_policy.get_actions(replica_state)
         post_decision_state = replica_state.post_decision_state(decisions)
         if not post_decision_state:
             status = "INVALID_MOVE"
             break
+        reward = compute_reward(decisions)
         replica_state = replica_state.transition(post_decision_state,
-                                                 donations=scenario.donations[epoch + 1],
-                                                 demands=scenario.demands[epoch + 1])
+                                                 next_donations=scenario.donations[epoch + 1],
+                                                 next_demands=scenario.demands[epoch + 1])
+        policy_reward.append(reward)
         simulation_history.append(decisions)
         epoch += 1
 
-    return replica_state.policy_reward, simulation_history, replica_state.id
+    print(f"Scenario: {scenario.index}")
+    print(simulation_history)
+    return sum(policy_reward), simulation_history, scenario.index
 
 
 def policy_evaluation(policy, scenarios):
@@ -41,12 +53,12 @@ def policy_evaluation(policy, scenarios):
         rewards.append(reward)
         if scenario.perfect_solution_reward:
             gaps.append(abs(reward - scenario.perfect_solution_reward)/scenario.perfect_solution_reward)
-    return sum(rewards)/n, sum(gaps)/n
+    return sum(rewards)/n, None  # sum(gaps)/n
 
 
 if __name__ == "__main__":
     params = {
-        "policies": ["myopic"],
+        "policies": ["basic"],
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
