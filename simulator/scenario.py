@@ -9,6 +9,8 @@ class Scenario(object):
         self.epochs = params['epochs']
 
         self.blood_types = params["blood_types"]
+        self.max_blood_age = params['max_age']
+        self.blood_ages = list(range(self.max_blood_age))
         self.donation_means = params["donation_means"]
         self.demand_means = params["donation_means"]
 
@@ -24,8 +26,8 @@ class Scenario(object):
         self.demands = self.generate_demands(self.epochs)
         self.donations = self.generate_donations(self.epochs)
 
-        self.init_blood_inventory = self.generate_donations(1)
-
+        self.blood_groups = [(i, j) for i in self.blood_types for j in self.blood_ages]
+        self.init_blood_inventory = self.generate_init_blood_inventory()
 
         self.perfect_solution_reward = None
 
@@ -39,27 +41,16 @@ class Scenario(object):
                     factor * self.demand_means[blood] * self.surgery_types_prop[surgery] *
                     self.substitution_prop[substitution])) for blood, surgery, substitution in self.demand_types})
 
-
-
-        if False:   #  ToDo: Remove?
-            demand = []
-            for dmd in Bld_Net.demandnodes:
-                if dmd[0] == "O-":
-                    if dmd[1] == "Urgent":
-                        demand.append(1)
-                    else:
-                        eleDem = max(0, int(np.random.poisson(factor * params['MAX_DEM_BY_BLOOD'][dmd[0]] - 1)) - 1)
-                        demand.append(eleDem)
-
-                else:
-                    demand.append(int(np.random.poisson(
-                        factor * params['MAX_DEM_BY_BLOOD'][dmd[0]] * params['SURGERYTYPES_PROP'][dmd[1]] *
-                        params['SUBSTITUTION_PROP'][dmd[2]])))
-
         return demand
 
     def generate_donations(self, epochs):
         return [{i: int(self.rnd_generator.poisson(self.donation_means[i])) for i in self.blood_types} for _ in range(epochs)]
 
+    def generate_init_blood_inventory(self):
+        multiplier = {age: .9 if age == '0' else (0.1 / (self.max_blood_age - 1)) for age in range(self.max_blood_age)}
+        return {(blood_type, age): int(np.random.poisson(self.donation_means[blood_type]) * multiplier[age])
+                for blood_type, age in self.blood_groups}
+
     def perfect_information_solution(self):
         pass
+

@@ -15,11 +15,19 @@ policies = {
 def run_simulation(scenario: Scenario, active_policy):
     simulation_history = []
     #ToDo: Generate state
-    replica_state = State(scenario.init_blood_inventory, scenario.demands[0])
-    while not replica_state.terminal_test():
-        action = active_policy.get_action(replica_state)
-        replica_state = replica_state.result(action)
-        simulation_history.append(action)
+    epoch = 0
+    replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
+    while epoch < scenario.epochs - 1:  # Terminal test
+        decisions = active_policy.get_action(replica_state)
+        post_decision_state = replica_state.post_decision_state(decisions)
+        if not post_decision_state:
+            status = "INVALID_MOVE"
+            break
+        replica_state = replica_state.transition(post_decision_state,
+                                                 donations=scenario.donations[epoch + 1],
+                                                 demands=scenario.demands[epoch + 1])
+        simulation_history.append(decisions)
+        epoch += 1
 
     return replica_state.policy_reward, simulation_history, replica_state.id
 
