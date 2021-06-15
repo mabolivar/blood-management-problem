@@ -65,22 +65,23 @@ def load_params():
     params["num_blood_types"] = len(params["blood_types"])
     params['allowed_transfers'] = [('AB+', 'AB+'), ('AB-', 'AB+'), ('AB-', 'AB-'), ('A+', 'AB+'), ('A+', 'A+'), ('A-', 'AB+'), ('A-', 'AB-'), ('A-', 'A+'), ('A-', 'A-'), ('B+', 'AB+'), ('B+', 'B+'), ('B-', 'AB+'), ('B-', 'AB-'), ('B-', 'B+'), ('B-', 'B-'), ('O+', 'AB+'), ('O+', 'A+'), ('O+', 'B+'), ('O+', 'O+'), ('O-', 'AB+'), ('O-', 'A+'), ('O-', 'B+'), ('O-', 'O+'), ('O-', 'AB-'), ('O-', 'A-'), ('O-', 'B-'), ('O-', 'O-')]
 
-    # Not necessary?
-    # params["blood_transfers"] = {(x, y): False for x in params['blood_types'] for y in params['blood_types']}
-    # for v in params["allowed_transfers"]:
-    #     params[v] = True
+    params["blood_transfers"] = {(x, y): False for x in params['blood_types'] for y in params['blood_types']}
+    for v in params["allowed_transfers"]:
+        params["blood_transfers"][v] = True
 
     params["max_age"] = 3
     params['surgery_types'] = ['urgent', 'elective']
     params['substitution'] = [True]
 
     # Set here one step contribution function parameters  - BONUSES and PENALTIES
-    params["rewards"] = {}
-    params["rewards"]['INFEASIABLE_SUBSTITUTION_PENALTY'] = -50
-    params["rewards"]['NO_SUBSTITUTION_BONUS'] = 5
-    params["rewards"]['URGENT_DEMAND_BONUS'] = 30
-    params["rewards"]['ELECTIVE_DEMAND_BONUS'] = 5
-    params["rewards"]['DISCARD_BLOOD_PENALTY'] = -10  # applied for the oldest age in the holding/vfa arcs
+    params["transfer_rewards"] = {}
+    params["transfer_rewards"]['INFEASIBLE_SUBSTITUTION_PENALTY'] = -50
+    params["transfer_rewards"]['NO_SUBSTITUTION_BONUS'] = 0
+    params["transfer_rewards"]['SUBSTITUTION_PENALTY'] = -10
+    params["transfer_rewards"]['SUBSTITUTION_O-'] = -10
+    params["transfer_rewards"]['URGENT_DEMAND_BONUS'] = 40
+    params["transfer_rewards"]['ELECTIVE_DEMAND_BONUS'] = 20
+    params["transfer_rewards"]['DISCARD_BLOOD_PENALTY'] = -10  # applied for the oldest age in the holding/vfa arcs
 
     # Set here max demand by blood type (when 'U'niform dist) or mean demand (when 'P'oisson dist)
     default_value = 20

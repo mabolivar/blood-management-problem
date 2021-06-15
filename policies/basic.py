@@ -12,6 +12,7 @@ class Basic(Policy):
         # demand_attributes: blood demand attributes (type, surgery, substitution)
         supply_attributes = [key for key, value in state.supply.items() if value > 0]
         demand_attributes = [key for key, value in state.demands.items() if value > 0]
+        # Decision (blood_type, age, (blood_type, surgery, substitution))
         x = {(*a, d): 0 for a in supply_attributes for d in demand_attributes}
 
         current_inventory = deepcopy(state.supply)

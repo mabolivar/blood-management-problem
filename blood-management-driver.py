@@ -15,8 +15,23 @@ policies = {
 }
 
 
-def compute_reward(decisions):
-    return 0
+def compute_reward(decisions: dict, blood_transfers: dict, transfer_rewards: dict):
+    # decision (blood_type, age, (blood_type, surgery, substitution))
+    value = 0
+    committed_decisions = {k: v for k,v in decisions.items() if v > 0}
+    for key, value in committed_decisions.items():
+        supply_blood = key[0]
+        demand_blood, surgery, allowed_substitution = key[2]
+        if (not allowed_substitution and supply_blood != demand_blood) or \
+                (allowed_substitution and not blood_transfers[(supply_blood, demand_blood)]):
+            value += transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"]
+        else:
+            value += transfer_rewards["NO_SUBSTITUTION_BONUS"] if supply_blood == demand_blood \
+                else transfer_rewards["SUBSTITUTION_PENALTY"]
+            value += transfer_rewards["SUBSTITUTION_O-"] if supply_blood == "O-" else 0
+            value += transfer_rewards["URGENT_DEMAND_BONUS"] if surgery == "urgent" \
+                else transfer_rewards["ELECTIVE_DEMAND_BONUS"]
+    return value
 
 
 def run_simulation(scenario: Scenario, active_policy: Policy):
@@ -31,7 +46,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
         if not post_decision_state:
             status = "INVALID_MOVE"
             break
-        reward = compute_reward(decisions)
+        reward = compute_reward(decisions, scenario.blood_transfers, scenario.transfer_rewards)
         replica_state = replica_state.transition(post_decision_state,
                                                  next_donations=scenario.donations[epoch + 1],
                                                  next_demands=scenario.demands[epoch + 1])
@@ -40,7 +55,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
         epoch += 1
 
     print(f"Scenario: {scenario.index}")
-    print(simulation_history)
+    # print(simulation_history)
     return sum(policy_reward), simulation_history, scenario.index
 
 
@@ -78,5 +93,5 @@ if __name__ == "__main__":
             policy.train(train_generator)
 
         avg_reward, avg_gap = policy_evaluation(policy, test_scenarios)
-
+        print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {avg_gap}")
 

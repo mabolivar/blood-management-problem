@@ -14,6 +14,8 @@ class Scenario(object):
         self.donation_means = params["donation_means"]
         self.demand_means = params["donation_means"]
 
+        self.blood_transfers = params["blood_transfers"]
+        self.transfer_rewards = params["transfer_rewards"]
         self.time_periods_surge = params["time_periods_surge"]
         self.surge_prob = params["surge_prob"]
         self.surge_factor = params['surge_factor']
