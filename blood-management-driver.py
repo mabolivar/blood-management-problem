@@ -4,24 +4,21 @@ from simulator.scenario import Scenario
 from simulator.state import State
 from policies.policy import Policy
 from policies.myopic import Myopic
+from policies.cfa import CFA
 from policies.adp import ADP
 from policies.basic import Basic
 from utils import load_params
 
-policies = {
-    "basic": Basic,
-    "myopic": Myopic,
-    "adp": ADP
-}
+policy_map = dict(basic=Basic, myopic=Myopic, adp=ADP)
 
 
-def compute_reward(decisions: dict, blood_transfers: dict, transfer_rewards: dict):
-    # decision (blood_type, age, (blood_type, surgery, substitution))
+def deprecated_compute_reward(decisions: dict, blood_transfers: dict, transfer_rewards: dict):
+    # decision ((blood_type, age), (blood_type, surgery, substitution))
     value = 0
-    committed_decisions = {k: v for k,v in decisions.items() if v > 0}
-    for key, value in committed_decisions.items():
-        supply_blood = key[0]
-        demand_blood, surgery, allowed_substitution = key[2]
+    committed_decisions = {k: v for k, v in decisions.items() if v > 0}
+    for key, _ in committed_decisions.items():
+        supply_blood = key[0][0]
+        demand_blood, surgery, allowed_substitution = key[1]
         if (not allowed_substitution and supply_blood != demand_blood) or \
                 (allowed_substitution and not blood_transfers[(supply_blood, demand_blood)]):
             value += transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"]
@@ -41,12 +38,12 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
     epoch = 0
     replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
     while epoch < scenario.epochs - 1:  # Terminal test
-        decisions = active_policy.get_actions(replica_state)
+        decisions = active_policy.get_actions(replica_state, scenario.reward_map)
         post_decision_state = replica_state.post_decision_state(decisions)
         if not post_decision_state:
             status = "INVALID_MOVE"
             break
-        reward = compute_reward(decisions, scenario.blood_transfers, scenario.transfer_rewards)
+        reward = scenario.compute_reward(decisions)
         replica_state = replica_state.transition(post_decision_state,
                                                  next_donations=scenario.donations[epoch + 1],
                                                  next_demands=scenario.demands[epoch + 1])
@@ -73,7 +70,7 @@ def policy_evaluation(policy, scenarios):
 
 if __name__ == "__main__":
     params = {
-        "policies": ["basic"],
+        "policies": ["basic", "myopic"],
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
@@ -88,7 +85,7 @@ if __name__ == "__main__":
     test_scenarios = [Scenario(index, test_generator, params) for index in range(params["test_simulations"])]
     for policy_name in params["policies"]:
         print(policy_name)
-        policy = policies[policy_name](params)
+        policy = policy_map[policy_name](params)
         if policy.require_training:
             policy.train(train_generator)
 

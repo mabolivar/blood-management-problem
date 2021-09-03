@@ -11,7 +11,7 @@ class State:
         self.demands = demands
 
     def post_decision_state(self, decisions):
-        used_supply = {(blood_type, age): sum(decisions.get((blood_type, age, d), 0) for d in self.demands.keys())
+        used_supply = {(blood_type, age): sum(decisions.get(((blood_type, age), d), 0) for d in self.demands.keys())
                        for blood_type, age in self.supply.keys()}
         post_state = {(blood_type, age): (self.supply[(blood_type, age - 1)] - used_supply[(blood_type, age - 1)]
                                           if age > 0 else 0) for blood_type, age in self.supply.keys()}

@@ -31,6 +31,7 @@ class Scenario(object):
         self.blood_groups = [(i, j) for i in self.blood_types for j in self.blood_ages]
         self.init_blood_inventory = self.generate_init_blood_inventory()
 
+        self.reward_map = self.get_epoch_reward_map()
         self.perfect_solution_reward = None
 
     def generate_demands(self, epochs):
@@ -55,4 +56,24 @@ class Scenario(object):
 
     def perfect_information_solution(self):
         pass
+
+    def get_epoch_reward_map(self):
+        # map keys = ((blood_type, age), (blood_type, surgery, substitution))
+        reward_map = {(s, d): 0 for s in self.blood_groups for d in self.demand_types if s[0] == d[0] and d[2]}
+        for s, d in reward_map.keys():
+            supply_blood = s[0]
+            demand_blood = d[0]
+            surgery = d[1]
+            reward_map[(s, d)] += self.transfer_rewards["NO_SUBSTITUTION_BONUS"] if supply_blood == demand_blood \
+                else self.transfer_rewards["SUBSTITUTION_PENALTY"]
+            reward_map[(s, d)] += self.transfer_rewards["SUBSTITUTION_O-"] if supply_blood == "O-" else 0
+            reward_map[(s, d)] += self.transfer_rewards["URGENT_DEMAND_BONUS"] if surgery == "urgent" \
+                else self.transfer_rewards["ELECTIVE_DEMAND_BONUS"]
+
+        return reward_map
+
+    def compute_reward(self, decisions):
+        return sum(self.reward_map.get(decision, self.transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"])
+                   for decision, units in decisions.items() if units > 0)
+
 
