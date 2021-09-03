@@ -4,7 +4,6 @@ from simulator.scenario import Scenario
 from simulator.state import State
 from policies.policy import Policy
 from policies.myopic import Myopic
-from policies.cfa import CFA
 from policies.adp import ADP
 from policies.basic import Basic
 from utils import load_params
