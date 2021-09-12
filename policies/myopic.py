@@ -1,4 +1,3 @@
-from copy import deepcopy
 from simulator.state import State
 from ortools.linear_solver import pywraplp
 from policies.policy import Policy
