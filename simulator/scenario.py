@@ -48,7 +48,9 @@ class Scenario(object):
         return demand
 
     def generate_donations(self, epochs):
-        return [None] + [{i: int(self.rnd_generator.poisson(self.donation_means[i])) for i in self.blood_types} for _ in range(1, epochs)]
+        return [{i: 0 for i in self.blood_types}] + \
+               [{i: int(self.rnd_generator.poisson(self.donation_means[i])) for i in self.blood_types}
+                for _ in range(1, epochs)]
 
     def generate_init_blood_inventory(self):
         multiplier = {age: .9 if age == 0 else (0.1 / (self.max_blood_age - 1)) for age in range(self.max_blood_age)}
@@ -76,9 +78,8 @@ class Scenario(object):
 
     def get_perfect_information_solution(self):
 
-        solver = pywraplp.Solver('simple_mip_program',
-                                          pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
         # Build network
+        last_epoch = self.epochs - 1
         max_blood_age = max(self.blood_ages)
         supply_nodes = {time: self.blood_groups for time in range(self.epochs)}
         demand_nodes = {time + 1: self.demand_types for time in range(self.epochs)}
@@ -89,42 +90,116 @@ class Scenario(object):
                                         if s[1] + 1 <= max_blood_age]
         demand_sink_arcs_per_epoch = [(d, "sink") for d in self.demand_types]
         supply_sink_arcs_per_epoch = [((blood_type, max_blood_age), "sink") for blood_type in self.blood_types]
+        supply_sink_arcs_last_epoch = [(s, "sink") for s in self.blood_groups if s[1] != max_blood_age]
 
         arcs_per_epoch = (supply_demand_arcs_per_epoch +
-                          supply_supply_arcs_per_epoch +
+                          # supply_supply_arcs_per_epoch + #Todo - Correct -- epoch t to t+1 (currently t to t)
                           demand_sink_arcs_per_epoch +
                           supply_sink_arcs_per_epoch)
-        supply_sink_arcs_last_epoch = [(s, "sink") for s in self.blood_groups if s[1] != max_blood_age]
-        nodes_per_epoch = self.blood_groups + self.demand_types + ['sink']
+        arcs_last_epoch = (supply_demand_arcs_per_epoch +
+                           supply_sink_arcs_last_epoch +
+                           demand_sink_arcs_per_epoch +
+                           supply_sink_arcs_per_epoch
+        )
 
-        # Adjacency dictionary
-        inner_per_epoch = {node: set() for node in nodes_per_epoch}
-        outer_per_epoch = {node: set() for node in nodes_per_epoch}
+        nodes_per_epoch = self.blood_groups + self.demand_types
+
+        # Adjacency dictionary for regular epoch
+        inner_per_epoch = {node: set() for node in nodes_per_epoch + ['sink']}
+        outer_per_epoch = {node: set() for node in nodes_per_epoch + ['sink']}
         for arc in arcs_per_epoch:
             outer_per_epoch[arc[0]].add(arc[1])
             inner_per_epoch[arc[1]].add(arc[0])
 
+        # Adjacency dictionary for last epoch
+        inner_last_epoch = {node: set() for node in nodes_per_epoch + ['sink']}
+        outer_last_epoch = {node: set() for node in nodes_per_epoch + ['sink']}
+        for arc in arcs_last_epoch:
+            outer_last_epoch[arc[0]].add(arc[1])
+            inner_last_epoch[arc[1]].add(arc[0])
+
         # Supply/demand for nodes
+        sink_demand = -1 * (sum(self.init_blood_inventory.values())
+                          + sum(sum(donation.values()) if donation is not None else 0
+                                for donation in self.donations))
         b = {
             epoch: {
                 **{(blood_type, age): self.donations[epoch][blood_type] if age == 0 else 0
                    for blood_type in self.blood_types
                    for age in self.blood_ages},
-                **{node: 0 for node in self.demand_types}
+                **{node: 0 for node in self.demand_types},
+                **{'sink': sink_demand}
             }
-            for epoch in range(1, self.epochs)
+            for epoch in range(self.epochs)
         }
         # Initial supply for blood groups
-        b[0] = self.init_blood_inventory
-        b['sink'] = -1 * (sum(self.init_blood_inventory.values())
-                          + sum(sum(donation.values()) if donation is not None else 0
-                                for donation in self.donations))
+        for blood_group, inventory in self.init_blood_inventory.items():
+            b[0][blood_group] = inventory
 
-        upper = {epoch + 1: {arc: self.demands[epoch][arc[0]] for arc in demand_sink_arcs_per_epoch}
-                 for epoch in range(self.epochs - 1)}
+        upper = {epoch: {arc: self.demands[epoch][arc[0]] for arc in demand_sink_arcs_per_epoch}
+                 for epoch in range(self.epochs)}
         reward_per_epoch = {arc: self.reward_map[arc] for arc in supply_demand_arcs_per_epoch}
 
         # Build model
+        solver = pywraplp.Solver('simple_mip_program',
+                                 pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
+
+        # A dictionary vars created to contain the referenced variables
+        x = {epoch: {
+            (head, tail): solver.NumVar(lb=0,
+                                        ub=upper[epoch].get((head, tail), solver.Infinity()),
+                                        name=f'x_{epoch}_{head}_{tail}')
+            for head, tail in arcs_per_epoch
+        } for epoch in range(self.epochs - 1)}
+
+        x[last_epoch] = {
+            (head, tail): solver.NumVar(
+                lb=0,
+                ub=upper[last_epoch].get((head, tail), solver.Infinity()),
+                name=f'x_{last_epoch}_{head}_{tail}')
+            for head, tail in arcs_last_epoch
+        }
+
+        # Balance constraint
+        for epoch in range(self.epochs - 1):
+            for i in nodes_per_epoch:
+                solver.Add(
+                    sum(x[epoch][i, j] for j in outer_per_epoch[i]) -
+                    sum(x[epoch][j, i] for j in inner_per_epoch[i]) == b[epoch][i]
+                )
+        # Balance for last epoch
+        for i in nodes_per_epoch:
+            solver.Add(
+                sum(x[last_epoch][i, j] for j in outer_last_epoch[i]) -
+                sum(x[last_epoch][j, i] for j in inner_last_epoch[i]) == b[last_epoch][i],
+                name='c_' + str(i)
+            )
+        # Balance for sink node
+        solver.Add(
+            - 1 * sum(x[epoch][j, 'sink'] for j in inner_per_epoch['sink'] for epoch in range(self.epochs - 1)) -
+            1 * sum(x[last_epoch][j, 'sink'] for j in inner_last_epoch['sink']) == b[last_epoch]['sink'],
+            name='c_sink'
+        )
+
+        # Objective function
+        reward_function = [x[epoch][arc] * reward for arc, reward in reward_per_epoch.items()
+                           for epoch in range(self.epochs)]
+        solver.Maximize(solver.Sum(reward_function))
+
+        if False:
+            print(solver.ExportModelAsLpFormat(True))
+
+        solver_status = solver.Solve()
+        # ToDO: Check '-AB' supply on epoch 0
+        if False and solver_status == pywraplp.Solver.OPTIMAL:
+            for epoch in range(self.epochs):
+                for blood_type in self.blood_types:
+                    for age in self.blood_ages:
+                        for demand_node in self.demand_types:
+                            v = x.get(epoch, {}).get(((blood_type, age), demand_node), None)
+                            if v and v.solution_value() >= 0.999:
+                                print(v.name(), ' = ', v.solution_value(), b[epoch][(blood_type, age)])
+            print("Total Cost =", solver.Objective().Value())
 
         return 0, {}
 
