@@ -10,20 +10,24 @@ class Myopic(Policy):
         self.mip_solver = pywraplp.Solver('simple_mip_program',
                                           pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
 
-    def get_actions(self, state: State, reward_map: dict()):
+    def get_actions(self, state: State, reward_map: dict(),
+                    allowed_blood_transfers: dict()):
         """
         supply_attributes: blood supply attributes (type, age)
         demand_attributes: blood demand attributes (type, surgery, substitution)
         """
         # Decision (blood_type, age, (blood_type, surgery, substitution))
         solution = self.solve(state.supply, state.demands, reward_map,
+                              allowed_blood_transfers,
                               print_solution=False, print_model=False)
         return solution['actions']
 
     def solve(self, supply: dict, demand: dict, reward_map: dict,
+              allowed_blood_transfers,
               print_solution=False, print_model=False):
         # def get_network()
-        supply_demand_arcs = [(s, d) for s in supply.keys() for d in demand.keys() if s[0] == d[0] and d[2]]
+        supply_demand_arcs = [(s, d) for s in supply.keys() for d in demand.keys()
+                              if allowed_blood_transfers[s[0], d[0]] and (d[2] or s[0] == d[0])]
         supply_sink_arcs = [(s, "sink") for s in supply]
         demand_sink_arcs = [(d, "sink") for d in demand]
         arcs = supply_demand_arcs + supply_sink_arcs + demand_sink_arcs
