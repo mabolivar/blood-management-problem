@@ -78,7 +78,7 @@ class Scenario(object):
         return sum(units * self.reward_map.get(decision, self.transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"])
                    for decision, units in decisions.items() if units > 0)
 
-    def get_perfect_information_solution(self):
+    def get_perfect_information_solution(self, debug_mode = False):
 
         # Build network
         last_epoch = self.num_epochs - 1
@@ -151,20 +151,22 @@ class Scenario(object):
         reward_function = [x[arc] * reward for arc, reward in rewards.items()]
         solver.Maximize(solver.Sum(reward_function))
 
-        if False:
+        if debug_mode:
             print(solver.ExportModelAsLpFormat(True))
 
         solver_status = solver.Solve()
-        if False and solver_status == pywraplp.Solver.OPTIMAL:
+        solution = [{} for _ in self.epochs]
+        if solver_status == pywraplp.Solver.OPTIMAL:
             for t in self.epochs:
                 for blood_type in self.blood_types:
                     for age in self.blood_ages:
                         for demand_node in self.demand_types:
                             v = x.get(((t, blood_type, age), (t,) + demand_node), None)
                             if v and v.solution_value() >= 0.999:
-                                print(v.name(), ' = ', v.solution_value(), b[(t, blood_type, age)])
-            print("Total Cost =", solver.Objective().Value())
+                                solution[t][((blood_type, age), demand_node)] = round(v.solution_value())
+                                if debug_mode:
+                                    print(v.name(), ' = ', v.solution_value(), b[(t, blood_type, age)])
 
-        return solver.Objective().Value(), {}
+        return solver.Objective().Value(), solution
 
 
