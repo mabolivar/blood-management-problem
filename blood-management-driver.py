@@ -36,7 +36,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
     #ToDo: Generate state
     epoch = 0
     replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
-    while epoch < scenario.num_epochs - 1:  # Terminal test
+    while epoch < scenario.num_epochs:  # Terminal test
         decisions = active_policy.get_actions(replica_state, scenario.reward_map,
                                               scenario.allowed_blood_transfers)
         post_decision_state = replica_state.post_decision_state(decisions)
@@ -44,14 +44,15 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
             status = "INVALID_MOVE"
             break
         reward = scenario.compute_reward(decisions)
-        replica_state = replica_state.transition(post_decision_state,
-                                                 next_donations=scenario.donations[epoch + 1],
-                                                 next_demands=scenario.demands[epoch + 1])
         policy_reward.append(reward)
         simulation_history.append(decisions)
         epoch += 1
+        if epoch < scenario.num_epochs:
+            replica_state = replica_state.transition(post_decision_state,
+                                                     next_donations=scenario.donations[epoch],
+                                                     next_demands=scenario.demands[epoch])
 
-    print(f"Scenario: {scenario.index}- Reward: {sum(policy_reward)} - Perfect reward: {scenario.perfect_solution_reward}")
+    print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} - Perfect reward: {scenario.perfect_solution_reward}")
     # print(simulation_history)
     return sum(policy_reward), simulation_history, scenario.index
 
