@@ -36,8 +36,9 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
     #ToDo: Generate state
     epoch = 0
     replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
-    while epoch < scenario.epochs - 1:  # Terminal test
-        decisions = active_policy.get_actions(replica_state, scenario.reward_map)
+    while epoch < scenario.num_epochs - 1:  # Terminal test
+        decisions = active_policy.get_actions(replica_state, scenario.reward_map,
+                                              scenario.allowed_blood_transfers)
         post_decision_state = replica_state.post_decision_state(decisions)
         if not post_decision_state:
             status = "INVALID_MOVE"
@@ -50,7 +51,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
         simulation_history.append(decisions)
         epoch += 1
 
-    print(f"Scenario: {scenario.index}")
+    print(f"Scenario: {scenario.index}- Reward: {sum(policy_reward)} - Perfect reward: {scenario.perfect_solution_reward}")
     # print(simulation_history)
     return sum(policy_reward), simulation_history, scenario.index
 
@@ -63,8 +64,8 @@ def policy_evaluation(policy, scenarios):
         reward, action_history, replica_id = run_simulation(scenario, policy)
         rewards.append(reward)
         if scenario.perfect_solution_reward:
-            gaps.append(abs(reward - scenario.perfect_solution_reward)/scenario.perfect_solution_reward)
-    return sum(rewards)/n, None  # sum(gaps)/n
+            gaps.append((scenario.perfect_solution_reward - reward)/scenario.perfect_solution_reward)
+    return sum(rewards)/n, sum(gaps)/n
 
 
 if __name__ == "__main__":
@@ -89,5 +90,5 @@ if __name__ == "__main__":
             policy.train(train_generator)
 
         avg_reward, avg_gap = policy_evaluation(policy, test_scenarios)
-        print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {avg_gap}")
+        print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
 

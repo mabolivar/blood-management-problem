@@ -7,7 +7,8 @@ class Basic(Policy):
     def __init__(self, args):
         self.require_training = False
 
-    def get_actions(self, state: State, reward_map: dict()):
+    def get_actions(self, state: State, reward_map: dict(),
+                    allowed_blood_transfers: dict()):
         # supply_attributes : blood supply attributes (type, age)
         # demand_attributes: blood demand attributes (type, surgery, substitution)
         supply_attributes = [key for key, value in state.supply.items() if value > 0]
