@@ -75,7 +75,7 @@ class Scenario(object):
         return reward_map
 
     def compute_reward(self, decisions):
-        return sum(self.reward_map.get(decision, self.transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"])
+        return sum(units * self.reward_map.get(decision, self.transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"])
                    for decision, units in decisions.items() if units > 0)
 
     def get_perfect_information_solution(self):
@@ -155,7 +155,6 @@ class Scenario(object):
             print(solver.ExportModelAsLpFormat(True))
 
         solver_status = solver.Solve()
-        # ToDO: Check '-AB' supply on epoch 0
         if False and solver_status == pywraplp.Solver.OPTIMAL:
             for t in self.epochs:
                 for blood_type in self.blood_types:

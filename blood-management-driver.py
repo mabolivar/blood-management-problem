@@ -64,7 +64,7 @@ def policy_evaluation(policy, scenarios):
         reward, action_history, replica_id = run_simulation(scenario, policy)
         rewards.append(reward)
         if scenario.perfect_solution_reward:
-            gaps.append(abs(reward - scenario.perfect_solution_reward)/scenario.perfect_solution_reward)
+            gaps.append((scenario.perfect_solution_reward - reward)/scenario.perfect_solution_reward)
     return sum(rewards)/n, sum(gaps)/n
 
 
@@ -90,5 +90,5 @@ if __name__ == "__main__":
             policy.train(train_generator)
 
         avg_reward, avg_gap = policy_evaluation(policy, test_scenarios)
-        print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {avg_gap}")
+        print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
 
