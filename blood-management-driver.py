@@ -33,7 +33,7 @@ def deprecated_compute_reward(decisions: dict, blood_transfers: dict, transfer_r
 def run_simulation(scenario: Scenario, active_policy: Policy):
     simulation_history = []
     policy_reward = []
-    #ToDo: Generate state
+    status = 'SOLVED'
     epoch = 0
     replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
     while epoch < scenario.num_epochs:  # Terminal test
@@ -52,7 +52,9 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
                                                      next_donations=scenario.donations[epoch],
                                                      next_demands=scenario.demands[epoch])
 
-    print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} - Perfect reward: {scenario.perfect_solution_reward}")
+    print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
+          f"- Perfect reward: {scenario.perfect_solution_reward} "
+          f"- Status: {status}")
     # print(simulation_history)
     return sum(policy_reward), simulation_history, scenario.index
 
