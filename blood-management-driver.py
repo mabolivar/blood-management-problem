@@ -51,10 +51,13 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
             replica_state = replica_state.transition(post_decision_state,
                                                      next_donations=scenario.donations[epoch],
                                                      next_demands=scenario.demands[epoch])
+    if scenario.to_visualize:
+        print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
+              f"- Perfect reward: {scenario.perfect_solution_reward} "
+              f"- Status: {status}")
+        scenario.export_solution(policy_name="",
+                                 decisions=simulation_history)
 
-    print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
-          f"- Perfect reward: {scenario.perfect_solution_reward} "
-          f"- Status: {status}")
     # print(simulation_history)
     return sum(policy_reward), simulation_history, scenario.index
 
@@ -78,7 +81,8 @@ if __name__ == "__main__":
         "test_seed": 7383,
         "train_simulations": 100,
         "test_simulations": 100,
-        "baseline_gap": False
+        "baseline_gap": False,
+        "scenarios_to_visualize": 2
     }
     params.update(load_params())
 

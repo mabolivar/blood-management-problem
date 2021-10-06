@@ -1,6 +1,6 @@
 from numpy.random import RandomState
-from copy import deepcopy
 from ortools.linear_solver import pywraplp
+from utils import plot_solution
 
 
 class Scenario(object):
@@ -34,7 +34,10 @@ class Scenario(object):
         self.init_blood_inventory = self.generate_init_blood_inventory()
 
         self.reward_map = self.get_epoch_reward_map()
+        self.to_visualize = index < params['scenarios_to_visualize']
+        self.network = self.generate_network()
         self.perfect_solution_reward, self.perfect_solution = self.get_perfect_information_solution()
+
 
     def generate_demands(self, epochs):
         demand = []
@@ -78,15 +81,15 @@ class Scenario(object):
         return sum(units * self.reward_map.get(decision, self.transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"])
                    for decision, units in decisions.items() if units > 0)
 
-    def get_perfect_information_solution(self, debug_mode = False):
-
+    def generate_network(self):
         # Build network
         last_epoch = self.num_epochs - 1
         max_blood_age = max(self.blood_ages)
 
         supply_demand_arcs_per_epoch = [((t,) + s, (t,) + d) for t in self.epochs for s in self.blood_groups
-                                        for d in self.demand_types if self.allowed_blood_transfers[s[0], d[0]] and (d[2] or s[0] == d[0])] # ToDo: Replacement is missing
-        supply_supply_arcs_per_epoch = [((t,) + s, (t+1, s[0], s[1] + 1)) for t in self.epochs[:-1]
+                                        for d in self.demand_types if self.allowed_blood_transfers[s[0], d[0]] and (
+                                                    d[2] or s[0] == d[0])]  # ToDo: Replacement is missing
+        supply_supply_arcs_per_epoch = [((t,) + s, (t + 1, s[0], s[1] + 1)) for t in self.epochs[:-1]
                                         for s in self.blood_groups
                                         if s[1] + 1 <= max_blood_age]
         demand_sink_arcs_per_epoch = [((t,) + d, "sink") for t in self.epochs for d in self.demand_types]
@@ -106,20 +109,13 @@ class Scenario(object):
         nodes = set.union(head_nodes, tail_nodes)
         nodes_per_epoch = self.blood_groups + self.demand_types
 
-        # Adjacency dictionary for regular epoch
-        inner_arcs = {node: set() for node in nodes}
-        outer_arcs = {node: set() for node in nodes}
-        for arc in arcs:
-            outer_arcs[arc[0]].add(arc)
-            inner_arcs[arc[1]].add(arc)
-
         # Supply/demand for nodes
         sink_demand = -1 * (sum(self.init_blood_inventory.values())
-                          + sum(sum(donation.values()) if donation is not None else 0
-                                for donation in self.donations))
+                            + sum(sum(donation.values()) if donation is not None else 0
+                                  for donation in self.donations))
         b = {node: 0 for node in nodes}
         b['sink'] = sink_demand
-        
+
         # Initial supply for blood groups
         for blood_group, inventory in self.init_blood_inventory.items():
             b[(0,) + blood_group] = inventory
@@ -128,15 +124,31 @@ class Scenario(object):
             for blood_type in self.blood_types:
                 b[(t, blood_type, 0)] = self.donations[t][blood_type]
 
-        upper_bound = {arc: self.demands[arc[0][0]][(arc[0][1:])] for arc in demand_sink_arcs_per_epoch}
+        upper_bounds = {arc: self.demands[arc[0][0]][(arc[0][1:])] for arc in demand_sink_arcs_per_epoch}
         rewards = {arc: self.reward_map[(arc[0][1:], arc[1][1:])] for arc in supply_demand_arcs_per_epoch}
+
+        return {"nodes": nodes, "b": b, "arcs": arcs, "upper_bounds": upper_bounds, "rewards": rewards}
+
+    def get_perfect_information_solution(self, debug_mode = False):
+        nodes = self.network['nodes']
+        b = self.network['b']
+        arcs = self.network['arcs']
+        upper_bounds = self.network["upper_bounds"]
+        rewards = self.network['rewards']
+
+        # Adjacency dictionary for regular epoch
+        inner_arcs = {node: set() for node in nodes}
+        outer_arcs = {node: set() for node in nodes}
+        for arc in arcs:
+            outer_arcs[arc[0]].add(arc)
+            inner_arcs[arc[1]].add(arc)
 
         # Build model
         solver = pywraplp.Solver('simple_mip_program',
                                  pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
 
         # A dictionary vars created to contain the referenced variables
-        x = {(head, tail): solver.NumVar(lb=0, ub=upper_bound.get((head, tail), solver.Infinity()),
+        x = {(head, tail): solver.NumVar(lb=0, ub=upper_bounds.get((head, tail), solver.Infinity()),
                                          name=f'x_{head}_{tail}') for head, tail in arcs}
 
         # Balance constraint
