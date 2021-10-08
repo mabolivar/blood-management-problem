@@ -129,7 +129,7 @@ class Scenario(object):
 
         return {"nodes": nodes, "b": b, "arcs": arcs, "upper_bounds": upper_bounds, "rewards": rewards}
 
-    def get_perfect_information_solution(self, debug_mode = False):
+    def get_perfect_information_solution(self, debug_mode=False):
         nodes = self.network['nodes']
         b = self.network['b']
         arcs = self.network['arcs']
@@ -180,5 +180,9 @@ class Scenario(object):
                                     print(v.name(), ' = ', v.solution_value(), b[(t, blood_type, age)])
 
         return solver.Objective().Value(), solution
+
+    def export_solution(self, policy_name, decisions):
+        if self.perfect_solution:
+            perfect_solution_plot = plot_solution(self, self.network, self.perfect_solution)
 
 

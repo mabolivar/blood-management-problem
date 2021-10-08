@@ -1,4 +1,7 @@
+import pandas as pd
 from collections import defaultdict
+from plotnine import *
+from simulator.state import State
 
 
 def get_demand_means (blood_types, default_value):
@@ -32,8 +35,8 @@ def get_demand_means (blood_types, default_value):
     demand_means['A+'] = 14
 
     return demand_means
-    
-    
+
+
 def get_donation_means(blood_types, default_value):
     donation_means = {k: default_value for k in blood_types}
 
@@ -55,7 +58,7 @@ def get_donation_means(blood_types, default_value):
     donation_means['A-'] = 6
     donation_means['O-'] = 7
     donation_means['A+'] = 14
-    
+
     return donation_means
 
 def load_params():
@@ -109,3 +112,92 @@ def load_params():
     # Move to simulation class
     #params['blood_inventory'] = None
     return params
+
+
+def simulate_solution(scenario, solution: list):
+    epoch = 0
+    replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
+    policy_reward = []
+    post_decision_inventory = [0]
+    post_decision_unsatisfied_demand = []
+    while epoch < scenario.num_epochs:  # Terminal test
+        decisions = solution[epoch]
+        post_decision_state = replica_state.post_decision_state(decisions)
+        if not post_decision_state:
+            status = "INVALID_MOVE"
+            break
+        reward = scenario.compute_reward(decisions)
+        policy_reward.append(reward)
+        post_decision_inventory.append(post_decision_state)
+        epoch += 1
+
+    return policy_reward, post_decision_inventory, post_decision_unsatisfied_demand
+
+
+def plot_solution(scenario, network, decisions):
+    nodes = (pd.DataFrame.from_dict(network['b'], orient="index")
+             .reset_index()
+             .rename(columns=({"index": "tuple_index", 0: "b"}), inplace=False)
+             [lambda x: x.tuple_index != "sink"]
+             .assign(name=lambda x: x.tuple_index.astype(str),
+                     epoch=lambda x: pd.Series(x.tuple_index.apply(lambda y: y[0])).astype(float),
+                     y_lab=lambda x: x.tuple_index.apply(lambda y: y[1:]),
+                     blood_type=lambda x: x.tuple_index.apply(lambda y: y[1]),
+                     len=lambda x: x.tuple_index.apply(len) * (x.name != "sink")
+                     )
+             .sort_values(by=["epoch", "blood_type"])
+             )
+
+    supply_nodes = (nodes
+                    [lambda x: x.len == 3]
+                    .assign(age=lambda x: list(zip(*x.tuple_index))[2],
+                            epoch=lambda x: x.epoch - 0.5,
+                            type="supply")
+                    .filter(["epoch", "y_lab", "b", "type"])
+                    )
+    demand_nodes = (nodes
+                    [lambda x: x.len > 3]
+                    .assign(type="demand")
+                    .filter(["epoch", "y_lab", "b", "type"])
+                    )
+    sink_node = nodes[lambda x: x.len == 0]
+
+    nodes_to_plot = (pd.concat([supply_nodes, demand_nodes])
+                     .assign(y_lab=lambda x: x.y_lab.astype(str))
+                     )
+
+    # Solution arcs
+    solution = (
+        pd.concat([pd.DataFrame.from_dict(decision, orient='index')
+                  .assign(epoch=index) for index, decision in enumerate(decisions)])
+            .reset_index()
+            .rename(columns={"index":"arc", 0: "flow"})
+            .assign(tail=lambda x: x.arc.apply(lambda y: y[0]).astype(str),
+                    head=lambda x: x.arc.apply(lambda y: y[1]).astype(str),
+                    next_epoch=lambda x: x.epoch + 1,
+                    epoch=lambda x: x.epoch - 0.5,
+                    line_type='supply->demand'
+                    )
+    )
+
+    reward, inventory, unsatisfied_demand = simulate_solution(scenario, decisions)
+
+    arcs_to_plot = (
+        solution
+        .filter(["epoch", "next_epoch", "tail", "head", "flow", "line_type"])
+    )
+
+    (
+            ggplot()
+            + geom_point(data=nodes_to_plot, mapping=aes(x="epoch", y="y_lab", color="type"))
+            + geom_segment(data=arcs_to_plot,
+                           mapping=aes(x="epoch", y="tail",
+                                       xend="next_epoch", yend="head",
+                                       linetype="line_type"),
+                           lineend="round",
+                           arrow=arrow(length=0.02))
+            + geom_point(data=nodes_to_plot, mapping=aes(x="epoch", y="y_lab", color="type"))
+    )
+
+    return None
+
