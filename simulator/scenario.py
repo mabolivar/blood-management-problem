@@ -183,6 +183,8 @@ class Scenario(object):
 
     def export_solution(self, policy_name, decisions):
         if self.perfect_solution:
-            perfect_solution_plot = plot_solution(self, self.network, self.perfect_solution)
+            plot_solution(self, self.network, self.perfect_solution, policy_name='perfect')
+
+        plot_solution(self, self.network, decisions, policy_name)
 
 

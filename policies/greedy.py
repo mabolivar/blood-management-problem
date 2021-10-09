@@ -5,6 +5,7 @@ from policies.policy import Policy
 
 class Greedy(Policy):
     def __init__(self, args):
+        self.name = 'greedy'
         self.require_training = False
 
     def get_actions(self, state: State):

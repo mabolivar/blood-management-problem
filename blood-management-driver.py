@@ -55,7 +55,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
         print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
               f"- Perfect reward: {scenario.perfect_solution_reward} "
               f"- Status: {status}")
-        scenario.export_solution(policy_name="",
+        scenario.export_solution(policy_name=active_policy.name,
                                  decisions=simulation_history)
 
     # print(simulation_history)

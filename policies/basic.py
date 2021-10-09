@@ -5,6 +5,7 @@ from policies.policy import Policy
 
 class Basic(Policy):
     def __init__(self, args):
+        self.name = 'basic'
         self.require_training = False
 
     def get_actions(self, state: State, reward_map: dict(),

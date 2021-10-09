@@ -5,6 +5,7 @@ from policies.policy import Policy
 
 class Myopic(Policy):
     def __init__(self, args):
+        self.name = 'myopic'
         self.require_training = False
         # Create the mip mip_solver with the CBC backend.
         self.mip_solver = pywraplp.Solver('simple_mip_program',
