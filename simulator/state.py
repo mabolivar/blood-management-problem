@@ -22,6 +22,13 @@ class State:
         post_state = {(blood_type, age): (self.supply[(blood_type, age - 1)] - used_supply[(blood_type, age - 1)]
                                           if age > 0 else 0) for blood_type, age in self.supply.keys()}
 
+        if not is_valid_decision(post_state):
+            print("Error: Over supply")
+            print(post_state)
+        if not is_valid_decision(unsatisfied_demand):
+            print("Error: Unsatisfied demand")
+            print(unsatisfied_demand)
+
         return post_state if is_valid_decision(post_state) and is_valid_decision(unsatisfied_demand) else None
 
     def transition(self, post_decision_state, next_donations, next_demands):
