@@ -14,7 +14,7 @@ class Scenario(object):
         self.max_blood_age = params['max_age']
         self.blood_ages = list(range(self.max_blood_age))
         self.donation_means = params["donation_means"]
-        self.demand_means = params["donation_means"]
+        self.demand_means = params["demand_means"]
 
         self.allowed_blood_transfers = params["blood_transfers"]
         self.transfer_rewards = params["transfer_rewards"]
@@ -37,7 +37,8 @@ class Scenario(object):
         self.to_visualize = index < params['scenarios_to_visualize']
         self.network = self.generate_network()
         self.perfect_solution_reward, self.perfect_solution = self.get_perfect_information_solution()
-
+        if self.perfect_solution and self.to_visualize:
+            self.export_solution(policy_name="perfect", decisions=self.perfect_solution)
 
     def generate_demands(self, epochs):
         demand = []
@@ -182,9 +183,6 @@ class Scenario(object):
         return solver.Objective().Value(), solution
 
     def export_solution(self, policy_name, decisions):
-        if self.perfect_solution:
-            plot_solution(self, self.network, self.perfect_solution, policy_name='perfect')
-
-        plot_solution(self, self.network, decisions, policy_name)
+        plot_solution(self, self.index, self.network, decisions, policy_name)
 
 

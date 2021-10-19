@@ -64,6 +64,15 @@ def get_donation_means(blood_types, default_value):
     donation_means['O-'] = 7
     donation_means['A+'] = 14
 
+    donation_means['AB+'] = 3
+    donation_means['B+'] = 8
+    donation_means['O+'] = 14
+    donation_means['B-'] = 2
+    donation_means['AB-'] = 3
+    donation_means['A-'] = 6
+    donation_means['O-'] = 7
+    donation_means['A+'] = 12
+
     return donation_means
 
 def load_params():
@@ -107,15 +116,13 @@ def load_params():
     params['time_periods_surge'] = set([i for i in range(1, params["epochs"]) if divmod(i, 3)[1] == 0])
     params['surge_prob'] = 0.7
     params['surge_factor'] = 6  # The surge demand is always going to be poisson with mean SURGE_FACTOR*demand_means, even if the regular demand distribution is Uniform
-    params['surgery_types_prop']['urgent'] = 1 / 2
+    params['surgery_types_prop']['urgent'] = 1 / 3
     params['surgery_types_prop']['elective'] = 1 - params['surgery_types_prop']['urgent']
 
     # Set here the weights for each substitution type (if different than the default)
     params['substitution_prop'][True] = 1
     # params['substitution_prop'][False] = 1 - params['substitution_prop'][True]
 
-    # Move to simulation class
-    #params['blood_inventory'] = None
     return params
 
 
@@ -151,7 +158,9 @@ def simulate_solution(scenario, solution: list):
     return policy_reward, post_decision_inventory, post_decision_unsatisfied_demand
 
 
-def plot_solution(scenario, network, decisions, policy_name='raw'):
+def plot_solution(scenario, scenario_index, network, decisions, policy_name='raw'):
+    scenario_index = str(scenario_index).zfill(2)
+    num_epochs = scenario.num_epochs
     nodes = (pd.DataFrame.from_dict(network['b'], orient="index")
              .reset_index()
              .rename(columns=({"index": "tuple_index", 0: "b"}), inplace=False)
@@ -271,9 +280,12 @@ def plot_solution(scenario, network, decisions, policy_name='raw'):
             + geom_text(data=nodes_to_plot[lambda x: x.b != 0],
                         mapping=aes(x="epoch", y="y_lab", label="b"),
                         size=label_size)
+            + scale_x_continuous(limits=[-0.5, num_epochs - 0.5])
+            + labs(title=f"Scenario {scenario_index} - {policy_name}",
+                   y="")
             + theme_xkcd()
     )
-    scenario_index = str(scenario.index).zfill(2)
+
     p.save(filename=f"scenario_{scenario_index}_{policy_name}_graph_{now()}.jpg",
            path="figures/raw",
            format="jpg",
