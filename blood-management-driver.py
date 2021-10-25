@@ -6,6 +6,7 @@ from policies.policy import Policy
 from policies.myopic import Myopic
 from policies.adp import ADP
 from policies.basic import Basic
+from policies.cfanetwork import CFANetwork
 from utils import load_params
 
 policy_map = dict(basic=Basic, myopic=Myopic, adp=ADP)
