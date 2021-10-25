@@ -4,11 +4,11 @@ from simulator.scenario import Scenario
 from simulator.state import State
 from policies.policy import Policy
 from policies.myopic import Myopic
-from policies.adp import ADP
+from policies.adp import VFA
 from policies.basic import Basic
 from utils import load_params
 
-policy_map = dict(basic=Basic, myopic=Myopic, adp=ADP)
+policy_map = dict(basic=Basic, myopic=Myopic, adp=VFA)
 
 
 def deprecated_compute_reward(decisions: dict, blood_transfers: dict, transfer_rewards: dict):
@@ -76,13 +76,13 @@ def policy_evaluation(policy, scenarios):
 
 if __name__ == "__main__":
     params = {
-        "policies": ["basic", "myopic"],
+        "policies": ["basic", "myopic", "adp"],
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
-        "test_simulations": 100,
+        "test_simulations": 10,
         "baseline_gap": False,
-        "scenarios_to_visualize": 2
+        "scenarios_to_visualize": 0
     }
     params.update(load_params())
 
