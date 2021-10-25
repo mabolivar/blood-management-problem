@@ -9,7 +9,7 @@ class VFA(Policy):
         self.require_training = False
         # Create the mip mip_solver with the CBC backend.
         self.mip_solver = pywraplp.Solver('simple_mip_program',
-                                          pywraplp.Solver.CBC_MIXED_INTEGER_PROGRAMMING)
+                                          pywraplp.Solver.CLP_LINEAR_PROGRAMMING)
         self.V = dict()
 
     def get_actions(self, state: State, reward_map: dict(),
@@ -70,7 +70,8 @@ class VFA(Policy):
         # Balance constraint
         for i in nodes:
             self.mip_solver.Add(
-                sum(x[i, j] for j in outer[i]) - sum(x[j, i] for j in inner[i]) == b.get(i, 0)
+                sum(x[i, j] for j in outer[i]) - sum(x[j, i] for j in inner[i]) == b.get(i, 0),
+                name=str(i)
             )
 
         # Objective function
@@ -94,6 +95,8 @@ class VFA(Policy):
                                 if x[arc].solution_value() >= 0.999},
                     'cost': (self.mip_solver.Objective().Value()
                              if solver_status == pywraplp.Solver.OPTIMAL else None),
-                    'status': solver_status}
+                    'status': solver_status,
+                    'duals': {node: self.mip_solver.LookupConstraint(str(node)).DualValue() for node in nodes}
+                    }
 
         return solution
