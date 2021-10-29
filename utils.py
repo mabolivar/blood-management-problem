@@ -128,7 +128,7 @@ def load_params():
 
 def simulate_solution(scenario, solution: list):
     epoch = 0
-    replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
+    replica_state = State(epoch, scenario.init_blood_inventory, scenario.demands[epoch])
     policy_reward = []
     post_decision_inventory = []
     post_decision_unsatisfied_demand = []

@@ -6,7 +6,8 @@ def is_valid_decision(post_state_values: dict):
 
 
 class State:
-    def __init__(self, blood_inventory: dict, demands: dict):
+    def __init__(self, epoch: int, blood_inventory: dict, demands: dict):
+        self.epoch = epoch
         self.supply = blood_inventory
         self.demands = demands
 
@@ -19,8 +20,12 @@ class State:
                 - sum(decisions.get((s, blood_type, surgery, substitution), 0) for s in self.supply.keys())
             for blood_type, surgery, substitution in self.demands.keys()
         }
-        post_state = {(blood_type, age): (self.supply[(blood_type, age - 1)] - used_supply[(blood_type, age - 1)]
-                                          if age > 0 else 0) for blood_type, age in self.supply.keys()}
+        post_state = {
+            (blood_type, age): (
+                self.supply[(blood_type, age - 1)] - used_supply[(blood_type, age - 1)]
+                if age > 0 else 0)
+            for blood_type, age in self.supply.keys()
+        }
 
         if not is_valid_decision(post_state):
             print("Error: Over supply")
@@ -37,4 +42,4 @@ class State:
         for blood_type in blood_types:
             next_supply[(blood_type, 0)] = next_donations[blood_type]
 
-        return State(blood_inventory=next_supply, demands=next_demands)
+        return State(epoch=self.epoch + 1, blood_inventory=next_supply, demands=next_demands)

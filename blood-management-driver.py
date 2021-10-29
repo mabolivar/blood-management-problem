@@ -35,7 +35,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
     policy_reward = []
     status = 'SOLVED'
     epoch = 0
-    replica_state = State(scenario.init_blood_inventory, scenario.demands[epoch])
+    replica_state = State(epoch, scenario.init_blood_inventory, scenario.demands[epoch])
     while epoch < scenario.num_epochs:  # Terminal test
         decisions = active_policy.get_actions(replica_state, scenario.reward_map,
                                               scenario.allowed_blood_transfers)
@@ -51,10 +51,15 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
             replica_state = replica_state.transition(post_decision_state,
                                                      next_donations=scenario.donations[epoch],
                                                      next_demands=scenario.demands[epoch])
+
     if scenario.to_visualize:
-        print(f"Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
+        gap = round(100 * (scenario.perfect_solution_reward - sum(policy_reward))/scenario.perfect_solution_reward, 1)
+        print(f"Policy: {active_policy.name}"
+              f" - Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
               f"- Perfect reward: {scenario.perfect_solution_reward} "
-              f"- Status: {status}")
+              f"- Status: {status}",
+              f" - Gap: {gap}%")
+
         scenario.export_solution(policy_name=active_policy.name,
                                  decisions=simulation_history)
 
@@ -80,7 +85,7 @@ if __name__ == "__main__":
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
-        "test_simulations": 10,
+        "test_simulations": 50,
         "baseline_gap": False,
         "scenarios_to_visualize": 0
     }
@@ -96,6 +101,6 @@ if __name__ == "__main__":
         if policy.require_training:
             policy.train(train_generator)
 
-        avg_reward, avg_gap = policy_evaluation(policy, test_scenarios)
+        avg_reward, avg_gap = policy_evaluation(policy, test_scenarios[::-1])
         print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
 
