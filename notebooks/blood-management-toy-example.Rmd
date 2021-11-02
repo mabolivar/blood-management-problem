@@ -1,0 +1,56 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r params}
+input_name <- "01-toy"
+input_path <- "./notebooks/data/toy/"
+```
+
+
+```{r libraries}
+library(dplyr)
+library(readr)
+library(glue)
+library("reticulate") # https://rstudio.github.io/reticulate/index.html
+```
+
+```{r read-data}
+
+nodes <- read_csv(glue("{input_path}/{input_name}-nodes.csv"),
+                  col_types = cols(
+                    node = col_character(),
+                    b = col_integer()
+                  ))
+arcs <- read_csv(glue("{input_path}/{input_name}-arcs.csv"),
+                 col_types = cols(
+                   tail = col_character(),
+                   head = col_character(),
+                   reward = col_integer()
+                 ))
+```
+
+
+```{r build-adp-graph}
+
+```
+
+```{python}
+# Requirements
+arcs = supply_demand_arcs + supply_nextsupply_arcs + nextsupply_sink_arcs + supplysink_sink + demand_sink_arcs
+upper = None
+reward = None
+
+
+head_nodes, tail_nodes = [set(nodes) for nodes in zip(*arcs)]
+nodes = set.union(head_nodes, tail_nodes)
+
+
+```
+
+```{python}
+import pandas as pd
+print(r["nodes"])
+```
+
