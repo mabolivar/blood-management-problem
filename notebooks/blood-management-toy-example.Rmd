@@ -48,27 +48,28 @@ arcs <- read_csv(glue("{input_path}/{input_name}-arcs.csv"),
 ```{r network-inputs}
 # First epoch
 # Create supply dictionaries
-supply_nodes <- nodes %>% filter(type == "s", epoch == 1) %>% 
+current_epoch <- 2
+supply_nodes <- nodes %>% filter(type == "s", epoch == current_epoch) %>% 
   mutate(node = glue("s_{blood_type}"))
 supply <- py_dict(supply_nodes$node, supply_nodes$b)
 
 
 # Create demand dictionaries
-demand_nodes <- nodes %>% filter(type == "d", epoch == 1) %>% 
+demand_nodes <- nodes %>% filter(type == "d", epoch == current_epoch) %>% 
   mutate(node = glue("d_{blood_type}"),
          b = -1 * b)
 demand <- with(demand_nodes, py_dict(node, b))
 
 # List for allowed blood transfers
 allowed_blood_transfers <- arcs %>% 
-  filter(tail_epoch == 1) %>% 
+  filter(tail_epoch == current_epoch) %>% 
   mutate(tail = glue("s_{tail_blood_type}"), 
          head = glue("d_{head_blood_type}")) %>% 
   distinct(tail, head) %>% 
   pmap(.f=function(tail, head) {tuple(tail, head)})
 
 rewards <- arcs %>% 
-  filter(tail_epoch == 1,
+  filter(tail_epoch == current_epoch,
          reward != 0) %>% 
   transmute(tail = glue("s_{tail_blood_type}"), 
          head = glue("d_{head_blood_type}"),
@@ -182,3 +183,19 @@ def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_soluti
 ```{python}
 solve_myopic_network(nodes, b, arcs, upper, reward)
 ```
+```{python}
+base_solution = solve_myopic_network(nodes, b, arcs, upper, reward)
+print(base_solution)
+duals = dict()
+for k, v in b.items():
+  if k[0] == "s" and k != "sink":
+    b[k]= v + 1
+    b['sink']-= 1
+    sol = solve_myopic_network(nodes, b, arcs, upper, reward)
+    print(k, b)
+    print(sol)
+    duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+    b[k] = v
+    b['sink']+= 1
+```
+
