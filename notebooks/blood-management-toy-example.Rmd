@@ -8,6 +8,10 @@ input_name <- "01-toy"
 input_path <- "./notebooks/data/toy/"
 ```
 
+```{python packages}
+from ortools.linear_solver import pywraplp
+```
+
 
 ```{r libraries, message=FALSE, warning=FALSE, include=FALSE}
 library(dplyr)
@@ -110,14 +114,71 @@ upper = {
 }
 reward = {
     **{arc: reward_map[arc] for arc in supply_demand_arcs},
-    **{arc: 0 if arc[0][1] > max_blood_age else self.V[epoch][(arc[0][0], arc[0][1])].get(arc[0][2], 0)
+    **{arc: 0 # V[epoch][(arc[0][0], arc[0][1])].get(arc[0][2], 0)
        for arc in supplysink_sink}
 }
 
 ```
 
-```{python}
-import pandas as pd
-print(r["nodes"])
+
+```{python solve-myopic}
+def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_solution=False):
+  # Adjacency dictionary
+  inner = {node: set() for node in nodes}
+  outer = {node: set() for node in nodes}
+  for arc in arcs:
+      outer[arc[0]].add(arc[1])
+      inner[arc[1]].add(arc[0])
+  
+  # Clear model
+  mip_solver = pywraplp.Solver('simple_mip_program',
+                                            pywraplp.Solver.CLP_LINEAR_PROGRAMMING)
+  
+  # A dictionary vars created to contain the referenced variables
+  x = {(head, tail): mip_solver.NumVar(lb=0, ub=upper.get((head, tail), mip_solver.Infinity()),
+                                            name=f'x_{head}_{tail}') for head, tail in arcs}
+  
+  # Balance constraint
+  for i in nodes:
+      mip_solver.Add(
+          sum(x[i, j] for j in outer[i]) - sum(x[j, i] for j in inner[i]) == b.get(i, 0),
+          name=str(i)
+      )
+  
+  # Objective function
+  reward_function = [x[arc] * reward for arc, reward in reward.items()]
+  mip_solver.Maximize(mip_solver.Sum(reward_function))
+  
+  if print_model:
+      print(mip_solver.ExportModelAsLpFormat(False))
+  
+  solver_status = mip_solver.Solve()
+  
+  if solver_status == pywraplp.Solver.OPTIMAL and print_solution:
+      for name, v in x.items():
+          if v.solution_value() >= 0.999:
+              print(v.name(), ' = ', v.solution_value())
+      print("Total Cost =", mip_solver.Objective().Value())
+  
+  optimal = (solver_status == pywraplp.Solver.OPTIMAL)
+  solution = {
+      'actions': {(arc[0], arc[1]): round(x[arc].solution_value())
+                  for arc in supply_demand_arcs
+                  if x[arc].solution_value() >= 0.999},
+      'cost': (mip_solver.Objective().Value()
+               if solver_status == pywraplp.Solver.OPTIMAL else None),
+      'status': solver_status,
+      'duals': {
+          node: {'dual': mip_solver.LookupConstraint(str(node)).DualValue(),
+                 "supply": b}
+          for node, b in supply.items() if node[0] =="s"
+      }
+  }
+  return solution
+
 ```
 
+
+```{python}
+solve_myopic_network(nodes, b, arcs, upper, reward)
+```
