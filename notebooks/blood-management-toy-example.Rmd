@@ -44,80 +44,38 @@ arcs <- read_csv(glue("{input_path}/{input_name}-arcs.csv"),
     separate(head, into = c("head_type", "head_blood_type", "head_epoch"), remove = FALSE)
 ```
 
-
-```{r network-inputs}
-# First epoch
-# Create supply dictionaries
-current_epoch <- 2
-supply_nodes <- nodes %>% filter(type == "s", epoch == current_epoch) %>% 
-  mutate(node = glue("s_{blood_type}"))
-supply <- py_dict(supply_nodes$node, supply_nodes$b)
-
-
-# Create demand dictionaries
-demand_nodes <- nodes %>% filter(type == "d", epoch == current_epoch) %>% 
-  mutate(node = glue("d_{blood_type}"),
-         b = -1 * b)
-demand <- with(demand_nodes, py_dict(node, b))
-
-# List for allowed blood transfers
-allowed_blood_transfers <- arcs %>% 
-  filter(tail_epoch == current_epoch) %>% 
-  mutate(tail = glue("s_{tail_blood_type}"), 
-         head = glue("d_{head_blood_type}")) %>% 
-  distinct(tail, head) %>% 
-  pmap(.f=function(tail, head) {tuple(tail, head)})
-
-rewards <- arcs %>% 
-  filter(tail_epoch == current_epoch,
-         reward != 0) %>% 
-  transmute(tail = glue("s_{tail_blood_type}"), 
-         head = glue("d_{head_blood_type}"),
-         reward) 
-reward_map <- py_dict(pmap(.l = rewards, 
-                                         .f=function(tail, head, reward) {tuple(tail, head)}),
-                                    rewards$reward)
-
-```
-
-```{python build-network}
-# Requirements
-supply = {tuple(k.split("_")): v for k, v in r["supply"].items()}
-demand = {tuple(k.split("_")): v for k, v in r["demand"].items()}
-allowed_blood_transfers = set(
-  (tuple(tail.split("_")), tuple(head.split("_")))
-  for tail, head in r["allowed_blood_transfers"]
-  )
-reward_map= {(tuple(k[0].split("_")), tuple(k[1].split("_"))): v for k, v in r["reward_map"].items()}
-
-# Create network
-supply_demand_arcs = [(s, d) for s in supply.keys() for d in demand.keys()
-                      if (s, d) in allowed_blood_transfers]
-supply_nextsupply_arcs = [(s, ("f", s[0], s[1])) for s in supply]
-nextsupply_sink_arcs = [(("f", s[0], s[1]), (s[0], s[1], i))
-                        for s in supply
-                        for i in range(1, supply[s] + 1)]
-supplysink_sink = [((s[0], s[1], i), "sink") for s in supply for i in range(1, supply[s] + 1)]
-demand_sink_arcs = [(d, "sink") for d in demand]
-
-
-arcs = supply_demand_arcs + supply_nextsupply_arcs + nextsupply_sink_arcs + supplysink_sink + demand_sink_arcs
-
-head_nodes, tail_nodes = [set(nodes) for nodes in zip(*arcs)]
-nodes = set.union(head_nodes, tail_nodes)
-
-b = {**{n: s for n, s in supply.items()},
-     **{n: 0 for n, d in demand.items()},
-     **{"sink": -1 * sum(supply.values())}}
-upper = {
-    **{arc: demand[arc[0]] for arc in demand_sink_arcs},
-    **{arc: 1 for arc in supplysink_sink}
-}
-reward = {
-    **{arc: reward_map[arc] for arc in supply_demand_arcs},
-    **{arc: 0 # V[epoch][(arc[0][0], arc[0][1])].get(arc[0][2], 0)
-       for arc in supplysink_sink}
-}
+```{python create-network}
+def create_network(supply, demand, allowed_blood_transfers, reward_map, V=dict()):
+  # Create network
+  supply_demand_arcs = [(s, d) for s in supply.keys() for d in demand.keys()
+                        if (s, d) in allowed_blood_transfers]
+  supply_nextsupply_arcs = [(s, ("f", s[0], s[1])) for s in supply]
+  nextsupply_sink_arcs = [(("f", s[0], s[1]), (s[0], s[1], i))
+                          for s in supply
+                          for i in range(1, supply[s] + 1)]
+  supplysink_sink = [((s[0], s[1], i), "sink") for s in supply for i in range(1, supply[s] + 1)]
+  demand_sink_arcs = [(d, "sink") for d in demand]
+  
+  
+  arcs = supply_demand_arcs + supply_nextsupply_arcs + nextsupply_sink_arcs + supplysink_sink + demand_sink_arcs
+  
+  head_nodes, tail_nodes = [set(nodes) for nodes in zip(*arcs)]
+  nodes = set.union(head_nodes, tail_nodes)
+  
+  b = {**{n: s for n, s in supply.items()},
+       **{n: 0 for n, d in demand.items()},
+       **{"sink": -1 * sum(supply.values())}}
+  upper = {
+      **{arc: demand[arc[0]] for arc in demand_sink_arcs},
+      **{arc: 1 for arc in supplysink_sink}
+  }
+  reward = {
+      **{arc: reward_map[arc] for arc in supply_demand_arcs},
+      **{arc: V.get((arc[0][0], arc[0][1]), dict()).get(arc[0][2], 0)
+         for arc in supplysink_sink}
+  }
+  
+  return nodes, b, arcs, upper, reward
 
 ```
 
@@ -164,7 +122,7 @@ def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_soluti
   optimal = (solver_status == pywraplp.Solver.OPTIMAL)
   solution = {
       'actions': {(arc[0], arc[1]): round(x[arc].solution_value())
-                  for arc in supply_demand_arcs
+                  for arc in arcs
                   if x[arc].solution_value() >= 0.999},
       'cost': (mip_solver.Objective().Value()
                if solver_status == pywraplp.Solver.OPTIMAL else None),
@@ -172,30 +130,94 @@ def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_soluti
       'duals': {
           node: {'dual': mip_solver.LookupConstraint(str(node)).DualValue(),
                  "supply": b}
-          for node, b in supply.items() if node[0] =="s"
+          for node, b in supply.items()
       }
   }
   return solution
 
 ```
 
+## First iteration
+
+```{r network-inputs}
+# First epoch
+# Create supply dictionaries
+current_epoch <- 1
+supply_nodes <- nodes %>% filter(type == "s", epoch == current_epoch) %>% 
+  mutate(node = glue("s_{blood_type}"))
+supply <- py_dict(supply_nodes$node, supply_nodes$b)
+
+
+# Create demand dictionaries
+demand_nodes <- nodes %>% filter(type == "d", epoch == current_epoch) %>% 
+  mutate(node = glue("d_{blood_type}"),
+         b = -1 * b)
+demand <- with(demand_nodes, py_dict(node, b))
+
+# List for allowed blood transfers
+allowed_blood_transfers <- arcs %>% 
+  filter(tail_epoch == current_epoch) %>% 
+  mutate(tail = glue("s_{tail_blood_type}"), 
+         head = glue("d_{head_blood_type}")) %>% 
+  distinct(tail, head) %>% 
+  pmap(.f=function(tail, head) {tuple(tail, head)})
+
+rewards <- arcs %>% 
+  filter(tail_epoch == current_epoch,
+         reward != 0) %>% 
+  transmute(tail = glue("s_{tail_blood_type}"), 
+         head = glue("d_{head_blood_type}"),
+         reward) 
+reward_map <- py_dict(pmap(.l = rewards, 
+                                         .f=function(tail, head, reward) {tuple(tail, head)}),
+                                    rewards$reward)
+
+```
+
+
+```{python build-input}
+
+# Requirements
+supply = {tuple(k.split("_")): v for k, v in r["supply"].items()}
+demand = {tuple(k.split("_")): v for k, v in r["demand"].items()}
+allowed_blood_transfers = set(
+  (tuple(tail.split("_")), tuple(head.split("_")))
+  for tail, head in r["allowed_blood_transfers"]
+  )
+reward_map= {(tuple(k[0].split("_")), tuple(k[1].split("_"))): v for k, v in r["reward_map"].items()}
+
+```
+
 
 ```{python}
-solve_myopic_network(nodes, b, arcs, upper, reward)
+### First epoch
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map
+  )
+# Solve network
+solution = solve_network(nodes, b, arcs, upper, reward)
 ```
+
+
+
 ```{python}
-base_solution = solve_myopic_network(nodes, b, arcs, upper, reward)
-print(base_solution)
+base_solution = solve_network(nodes, b, arcs, upper, reward)
 duals = dict()
 for k, v in b.items():
   if k[0] == "s" and k != "sink":
     b[k]= v + 1
     b['sink']-= 1
-    sol = solve_myopic_network(nodes, b, arcs, upper, reward)
+    sol = solve_network(nodes, b, arcs, upper, reward)
     print(k, b)
     print(sol)
     duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
     b[k] = v
     b['sink']+= 1
+    
+duals
 ```
 
