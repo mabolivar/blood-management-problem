@@ -9,6 +9,7 @@ input_path <- "./notebooks/data/toy/"
 ```
 
 ```{python packages}
+from math import ceil
 from ortools.linear_solver import pywraplp
 ```
 
@@ -164,13 +165,13 @@ def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_soluti
 ```{r network-inputs}
 # First epoch
 # Create input dictionaries
-num_epocs <- max(as.integer(nodes$epoch)) - 1
-supply <- dict()
+num_epochs <- max(as.integer(nodes$epoch))
+donations <- dict()
 demand <- dict()
 allowed_blood_transfers <- dict()
 reward_map <- dict()
 
-for (i in 0:num_epocs){
+for (i in 0:(num_epochs-1)){
   current_epoch <- i + 1
   supply_nodes <- nodes %>% filter(type == "s", epoch == current_epoch) %>% 
     mutate(node = glue("s_{blood_type}"))
@@ -199,48 +200,32 @@ for (i in 0:num_epocs){
                                 .f=function(tail, head, reward) {tuple(tail, head)}),
                            rewards$reward)
   
-  py_set_item(supply, i, py_dict(supply_nodes$node, supply_nodes$b))
+  py_set_item(donations, i, py_dict(supply_nodes$node, supply_nodes$b))
   py_set_item(demand, i, py_dict(demand_nodes$node, demand_nodes$b))
   py_set_item(allowed_blood_transfers, i, epoch_allowed_blood_transfers)
   py_set_item(reward_map, i, epoch_rewards)
 }
 ```
 
-
-## First epoch
-
+## Intialization
 ```{python}
-# Get input
-epoch = 0
-supply, demand, allowed_blood_transfers, reward_map = transition_function(
-  _inventory=dict(), 
-  _donations=r["supply"][epoch], 
-  _demand=r["demand"][epoch], 
-  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
-  _reward_map=r["reward_map"][epoch]
-  )
-
-# Get network
-nodes, b, arcs, upper, reward = create_network(
-  supply, 
-  demand, 
-  allowed_blood_transfers, 
-  reward_map
-  )
-# Solve network
-solution = solve_network(nodes, b, arcs, upper, reward)
+total_iterations = 5
+total_rewards = [0] * total_iterations
+blood_nodes = [tuple(k.split("_")) for k in r["donations"][0].keys()]
+V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(r["num_epochs"])}
 ```
 
 
-## Second epoch
+## 1st iteration
+### 1st epoch
 
 ```{python}
 # Get input
-inventory = {s: solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
-epoch = 1
+num_iteration = 0
+epoch = 0
 supply, demand, allowed_blood_transfers, reward_map = transition_function(
-  _inventory=inventory, 
-  _donations=r["supply"][epoch], 
+  _inventory=dict(), 
+  _donations=r["donations"][epoch], 
   _demand=r["demand"][epoch], 
   _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
   _reward_map=r["reward_map"][epoch]
@@ -251,10 +236,42 @@ nodes, b, arcs, upper, reward = create_network(
   supply, 
   demand, 
   allowed_blood_transfers, 
-  reward_map
+  reward_map,
+  V = V[epoch]
   )
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+### 2nd epoch
+
+```{python}
+# Get input
+inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
+epoch = 1
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=inventory, 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+
+#### Get v (duals)
+```{python}
 duals = dict()
 for k, v in b.items():
   if k[0] == "s" and k != "sink":
@@ -264,7 +281,332 @@ for k, v in b.items():
     duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
     b[k] = v
     b['sink']+= 1
-    
-duals
+
 ```
+
+
+#### Update Value function
+```{python}
+alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
+for node, v in duals.items():
+  V_update = V[epoch - 1][node]
+  V_update[v["supply"]] = (1-alpha) * (V_update.get(v["supply"], 0)) + (alpha) * v["dual"]
+
+#' ToDo: Maintain Monotonically
+
+```
+
+## 2st iteration
+### 1st epoch
+```{python}
+# Get input
+num_iteration += 1
+epoch = 0
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=dict(), 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+### 2nd epoch
+
+```{python}
+# Get input
+inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
+epoch += 1
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=inventory, 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+#### Get v (duals)
+```{python}
+duals = dict()
+for k, v in b.items():
+  if k[0] == "s" and k != "sink":
+    b[k]= v + 1
+    b['sink']-= 1
+    sol = solve_network(nodes, b, arcs, upper, reward)
+    duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+    b[k] = v
+    b['sink']+= 1
+
+```
+
+
+#### Update Value function
+```{python}
+alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
+for node, v in duals.items():
+  V_update = V[epoch - 1][node]
+  V_update[v["supply"]] = (1-alpha) * (V_update.get(v["supply"], 0)) + (alpha) * v["dual"]
+
+#' ToDo: Maintain Monotonically
+
+```
+
+## 3st iteration
+### 1st epoch
+```{python}
+# Get input
+num_iteration += 1
+epoch = 0
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=dict(), 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+### 2nd epoch
+
+```{python}
+# Get input
+inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
+epoch += 1
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=inventory, 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+#### Get v (duals)
+```{python}
+duals = dict()
+for k, v in b.items():
+  if k[0] == "s" and k != "sink":
+    b[k]= v + 1
+    b['sink']-= 1
+    sol = solve_network(nodes, b, arcs, upper, reward)
+    duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+    b[k] = v
+    b['sink']+= 1
+
+```
+
+
+#### Update Value function
+```{python}
+alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
+for node, v in duals.items():
+  V_update = V[epoch - 1][node]
+  V_update[v["supply"]] = (1-alpha) * (V_update.get(v["supply"], 0)) + (alpha) * v["dual"]
+
+#' ToDo: Maintain Monotonically
+
+```
+
+## 4st iteration
+### 1st epoch
+```{python}
+# Get input
+num_iteration += 1
+epoch = 0
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=dict(), 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+### 2nd epoch
+
+```{python}
+# Get input
+inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
+epoch += 1
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=inventory, 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+#### Get v (duals)
+```{python}
+duals = dict()
+for k, v in b.items():
+  if k[0] == "s" and k != "sink":
+    b[k]= v + 1
+    b['sink']-= 1
+    sol = solve_network(nodes, b, arcs, upper, reward)
+    duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+    b[k] = v
+    b['sink']+= 1
+
+```
+
+
+#### Update Value function
+```{python}
+alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
+for node, v in duals.items():
+  V_update = V[epoch - 1][node]
+  V_update[v["supply"]] = (1-alpha) * (V_update.get(v["supply"], 0)) + (alpha) * v["dual"]
+
+#' ToDo: Maintain Monotonically
+print(V)
+```
+
+
+## 5st iteration
+### 1st epoch
+```{python}
+# Get input
+num_iteration += 1
+epoch = 0
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=dict(), 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+### 2nd epoch
+
+```{python}
+# Get input
+inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0) for s in supply}
+epoch += 1
+supply, demand, allowed_blood_transfers, reward_map = transition_function(
+  _inventory=inventory, 
+  _donations=r["donations"][epoch], 
+  _demand=r["demand"][epoch], 
+  _allowed_blood_transfer=r["allowed_blood_transfers"][epoch],
+  _reward_map=r["reward_map"][epoch]
+  )
+
+# Get network
+nodes, b, arcs, upper, reward = create_network(
+  supply, 
+  demand, 
+  allowed_blood_transfers, 
+  reward_map,
+  V = V[epoch]
+  )
+# Solve network
+base_solution = solve_network(nodes, b, arcs, upper, reward)
+total_rewards[num_iteration] += base_solution["cost"]
+```
+#### Get v (duals)
+```{python}
+duals = dict()
+for k, v in b.items():
+  if k[0] == "s" and k != "sink":
+    b[k]= v + 1
+    b['sink']-= 1
+    sol = solve_network(nodes, b, arcs, upper, reward)
+    duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+    b[k] = v
+    b['sink']+= 1
+
+```
+
+
+#### Update Value function
+```{python}
+alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
+for node, v in duals.items():
+  V_update = V[epoch - 1][node]
+  V_update[v["supply"]] = (1-alpha) * (V_update.get(v["supply"], 0)) + (alpha) * v["dual"]
+
+#' ToDo: Maintain Monotonically
+print(V)
+```
+
 
