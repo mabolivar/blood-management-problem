@@ -9,6 +9,7 @@ input_path <- "./notebooks/data/toy/"
 ```
 
 ```{python packages}
+import pandas as pd
 from math import ceil
 from ortools.linear_solver import pywraplp
 ```
@@ -207,12 +208,49 @@ for (i in 0:(num_epochs-1)){
 }
 ```
 
+```{python solution_to_df_func}
+def solution_to_df(solution, num_iteration=None):
+  epochs = solution.keys()
+  actions_df = pd.concat(
+    pd.DataFrame.from_dict(
+    solution[t]["actions"], 
+    orient = "index",
+    columns=[ "flow"]
+    )
+    .reset_index()
+    .rename(columns={"index":"arc"})
+    .assign(epoch = t) for t in epochs
+    )
+  reward_df = pd.concat(
+    pd.DataFrame.from_dict(
+    solution[t]["rewards"], 
+    orient = "index",
+    columns=[ "reward"]
+    )
+    .reset_index()
+    .rename(columns={"index":"arc"})
+    .assign(epoch = t) for t in epochs
+    )
+  return (reward_df
+          .merge(actions_df, how="left")
+          .assign(iteration = num_iteration)
+         )
+
+```
+
+
+
 ## Intialization
 ```{python}
+num_epochs = r["num_epochs"]
 total_iterations = 5
 total_rewards = [0] * total_iterations
+iteration_solutions = [
+  {epoch: dict() for epoch in range(num_epochs)} 
+  for _ in range(total_iterations)
+  ]
 blood_nodes = [tuple(k.split("_")) for k in r["donations"][0].keys()]
-V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(r["num_epochs"])}
+V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(num_epochs)}
 ```
 
 
@@ -242,6 +280,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 ### 2nd epoch
 
@@ -268,6 +310,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 
 #### Get v (duals)
@@ -321,6 +367,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 ### 2nd epoch
 
@@ -347,6 +397,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 #### Get v (duals)
 ```{python}
@@ -399,6 +453,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 ### 2nd epoch
 
@@ -425,6 +483,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 #### Get v (duals)
 ```{python}
@@ -477,6 +539,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 ### 2nd epoch
 
@@ -503,6 +569,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 #### Get v (duals)
 ```{python}
@@ -556,6 +626,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 ### 2nd epoch
 
@@ -582,6 +656,10 @@ nodes, b, arcs, upper, reward = create_network(
 # Solve network
 base_solution = solve_network(nodes, b, arcs, upper, reward)
 total_rewards[num_iteration] += base_solution["cost"]
+iteration_solutions[num_iteration][epoch] = {
+  "actions": base_solution["actions"],
+  "rewards": reward
+  }
 ```
 #### Get v (duals)
 ```{python}
@@ -609,4 +687,11 @@ for node, v in duals.items():
 print(V)
 ```
 
+```{python}
 
+solution_df  = pd.concat(
+  solution_to_df(iteration_solutions[i], i) 
+  for i in range(total_iterations)
+  )
+
+```
