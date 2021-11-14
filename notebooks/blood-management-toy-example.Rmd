@@ -19,6 +19,7 @@ from ortools.linear_solver import pywraplp
 library(dplyr)
 library(readr)
 library(tidyr)
+library(ggplot2)
 library(purrr)
 library(stringr)
 library(glue)
@@ -33,7 +34,8 @@ nodes <- read_csv(glue("{input_path}/{input_name}-nodes.csv"),
                     b = col_integer()
                     )
                   ) %>% 
-  separate(node, into = c("type", "blood_type", "epoch"), remove = FALSE)
+  separate(node, into = c("type", "blood_type", "epoch"), remove = FALSE) %>% 
+  mutate(epoch = as.numeric(epoch)) # ToDO: Validate this doesn't break anything
 
 arcs <- read_csv(glue("{input_path}/{input_name}-arcs.csv"),
                  col_types = cols(
@@ -43,7 +45,9 @@ arcs <- read_csv(glue("{input_path}/{input_name}-arcs.csv"),
                    )
                  ) %>%
     separate(tail, into = c("tail_type", "tail_blood_type", "tail_epoch"), remove = FALSE) %>% 
-    separate(head, into = c("head_type", "head_blood_type", "head_epoch"), remove = FALSE)
+    separate(head, into = c("head_type", "head_blood_type", "head_epoch"), remove = FALSE) %>% 
+  mutate(tail_epoch = as.numeric(tail_epoch),
+         head_epoch = as.numeric(head_epoch)) # ToDO: Validate this doesn't break anything
 ```
 
 ```{python transition_function}
@@ -95,6 +99,7 @@ def create_network(supply, demand, allowed_blood_transfers, reward_map, V=dict()
   }
   reward = {
       **{arc: reward_map[arc] for arc in supply_demand_arcs},
+      **{arc: 0 for arc in supply_nextsupply_arcs},
       **{arc: V.get((arc[0][0], arc[0][1]), dict()).get(arc[0][2], 0)
          for arc in supplysink_sink}
   }
@@ -688,10 +693,151 @@ print(V)
 ```
 
 ```{python}
-
-solution_df  = pd.concat(
+solution_df  = (pd.concat(
   solution_to_df(iteration_solutions[i], i) 
   for i in range(total_iterations)
   )
+  .reset_index()
+  .assign(
+    tail=lambda x: x.arc.apply(lambda y: y[0]),
+    head=lambda x: x.arc.apply(lambda y: y[1])
+  )
+  # [lambda x: (x["tail"].apply(lambda y: len(y) <= 2) & 
+  #               x["head"].apply(lambda y: len(y) > 2)) | 
+  #               x["head"].apply(lambda y: y[0] == "f")]
+  .assign(
+    tail=lambda x: x["tail"].astype(str),
+    head=lambda x: x["head"].astype(str),
+    arc=lambda x: x.arc.astype(str)
+)
+)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+space_per_blood <- 3
+offset_inventory_y <- 1
+offset_inventory_x <- 0.7
+offset_f_x <- 0.5
+offset_demand_x <- 0.4
+
+# Build positioning map
+positioning_map <- nodes %>% 
+  transmute(blood = blood_type, type, epoch = as.integer(epoch) - 1) %>% 
+  mutate(
+    x_pos = epoch + offset_demand_x * (type == "d"),
+    blood_y_pos = (as.numeric(factor(blood)) - 1) * space_per_blood,
+    type_y_pos = 1/2 * space_per_blood + 1/4 * space_per_blood * (type == "d")
+    )
+
+# Get arcs details
+separeted_arcs <- py["solution_df"] %>% 
+  mutate(tail_cleaned = str_replace_all(tail, "[^[:alnum:],]+", "") %>%
+           str_remove("f,") %>% 
+           paste0(., if_else(str_detect(tail,"^\\('f',"),",f","")),
+         head_cleaned = str_replace_all(head, "[^[:alnum:],]+", "") %>%
+           str_remove("f,") %>% 
+           paste0(., if_else(str_detect(head,"^\\('f',"),",f",""))
+         ) %>% 
+  separate(tail_cleaned, 
+           into = c("tail_type","tail_blood", "tail_other"), 
+           extra = "merge",
+           fill = "right") %>%
+  separate(head_cleaned, 
+           into = c("head_type","head_blood", "head_other"), 
+           extra = "merge",
+           fill = "right")
+
+# Build node positioning for plotting
+nodes_wpos <- bind_rows(
+  separeted_arcs %>%
+    filter(flow > 0) %>%
+    select(
+         iteration,
+         epoch,
+         node = tail,
+         type = tail_type,
+         blood = tail_blood,
+         other = tail_other),
+  separeted_arcs %>% 
+    filter(flow > 0 | head_type == "d") %>% 
+    select(
+         iteration,
+         epoch, 
+         node = head, 
+         type = head_type, 
+         blood = head_blood, 
+         other = head_other),
+  ) %>% 
+  distinct() %>% 
+  left_join(positioning_map, by = c("epoch", "type", "blood")) %>% 
+  # Fix ypos for parallel arcs
+  group_by(iteration, epoch, type, blood) %>% 
+  mutate(
+    num_other = as.numeric(other),
+    mean_other = mean(num_other, na.rm = T),
+    step_inv = if_else(
+      is.na(num_other),
+      0.0,
+      2 * offset_inventory_y / (max(num_other, na.rm = T) - min(num_other, na.rm = T))),
+    blood_y_pos = blood_y_pos + case_when(is.na(num_other) ~ 0,
+                                           TRUE ~ (num_other - mean_other) * step_inv)
+    ) %>% 
+  ungroup() %>% 
+  mutate(x_pos = x_pos + case_when(is.na(other) ~ 0,
+                           !is.na(num_other) ~ offset_inventory_x,
+                           other == "f" ~ offset_f_x),
+         y_pos = blood_y_pos + type_y_pos) %>% 
+  arrange(iteration, epoch, type, blood, other) %>% 
+  select(-blood_y_pos, -type_y_pos, -num_other, -mean_other, -step_inv) %>% 
+  # Add supply/demand values
+  left_join(nodes %>% transmute(epoch = epoch -1, blood = blood_type, type, b), 
+            by = c("epoch", "type", "blood")) %>% 
+  mutate(b = if_else(!is.na(other), as.integer(NA), b))
+  
+# Add position to arcs
+arcs_wpos <- separeted_arcs %>%
+  filter(flow > 0) %>% 
+  select(iteration, epoch, tail, head, reward, flow,
+         ends_with("_type"), ends_with("_blood"), ends_with("_other")) %>% 
+  inner_join(nodes_wpos %>% 
+              select(-node, -b) %>% 
+              rename(tail_x_pos = x_pos,
+                     tail_y_pos = y_pos), 
+            by=c("iteration", "epoch", 
+                 "tail_type"="type", 
+                 "tail_blood"="blood",
+                 "tail_other"="other")
+  ) %>% 
+  inner_join(nodes_wpos %>% 
+              select(-node, -b)%>% 
+              rename(head_x_pos = x_pos,
+                     head_y_pos = y_pos), 
+            by=c("iteration", "epoch", 
+                 "head_type"="type", 
+                 "head_blood"="blood",
+                 "head_other"="other")
+  ) %>% 
+  select(iteration:flow, tail_x_pos, tail_y_pos, head_x_pos, head_y_pos, everything())
+
+```
+
+```{r plot-iterations, warning=FALSE}
+
+ggplot() +
+  geom_point(data = nodes_wpos, aes(x = x_pos, y = y_pos, color = type)) +
+  geom_text(data = nodes_wpos, aes(x = x_pos, y = y_pos, label = b), size = 2) +
+  geom_segment(data=arcs_wpos,
+               mapping=aes(x = tail_x_pos, y = tail_y_pos,
+                           xend= head_x_pos, yend=head_y_pos,
+                           linetype="line_type"),
+               lineend="round",
+               arrow=arrow(0.02)) + 
+  scale_y_reverse() + 
+  facet_wrap(iteration ~ .)
+
+now_str = lubridate::now() %>% str_remove_all("[^[:alnum:]]+")
+ggsave(glue("notebooks/figures/raw/toy_plotting_{now_str}.png"),
+       width = 8, height = 5)
 
 ```
