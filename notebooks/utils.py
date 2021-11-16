@@ -92,6 +92,35 @@ def solve_network(nodes, b, arcs, upper, reward, print_model=False, print_soluti
   return solution
 
 
+def optimization_step(supply, demand, allowed_blood_transfers, 
+    reward_map, V=dict()):
+  """ Combine create_network(), solve_network() and generate duals processes """
+  # Get network
+  nodes, b, arcs, upper, reward = create_network(
+    supply, 
+    demand, 
+    allowed_blood_transfers, 
+    reward_map,
+    V = V
+    )
+    
+  # Solve network
+  base_solution = solve_network(nodes, b, arcs, upper, reward)
+  
+  # Get duals
+  duals = dict()
+  for k, v in b.items():
+    if k[0] == "s" and k != "sink":
+      b[k]= v + 1
+      b['sink']-= 1
+      sol = solve_network(nodes, b, arcs, upper, reward)
+      duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+      b[k] = v
+      b['sink']+= 1
+    
+  return base_solution, reward, duals
+
+
 def transition_function(_inventory, _donations, 
                         _demand, _allowed_blood_transfer,
                         _reward_map):
