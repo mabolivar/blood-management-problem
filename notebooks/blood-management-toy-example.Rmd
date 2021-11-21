@@ -5,7 +5,7 @@ output: html_notebook
 
 ```{r params}
 rm(list = ls()) # Remove all environment vars
-input_name <- "03-3epochs-toy"
+input_name <- "04-6epochs-toy"
 input_path <- "./notebooks/data/toy/"
 monotone_enabled <- TRUE
 ```
@@ -112,7 +112,7 @@ for (i in 0:(num_epochs-1)){
 ```{python}
 monotone_enabled = r["monotone_enabled"]
 num_epochs = r["num_epochs"]
-total_iterations = 20
+total_iterations = 30
 total_rewards = [0] * total_iterations
 value_function_path = [dict()] * total_iterations
 iteration_solutions = [
@@ -199,6 +199,7 @@ positioning_map <- nodes %>%
 
 # Get arcs details
 separeted_arcs <- py["solution_df"] %>% 
+     filter(max(iteration) < 30 | iteration %% 3 == 0) %>% 
   mutate(tail_cleaned = str_replace_all(tail, "[^[:alnum:],]+", "") %>%
            str_remove("f,") %>% 
            paste0(., if_else(str_detect(tail,"^\\('f',"),",f","")),
@@ -352,7 +353,10 @@ value_table = pd.DataFrame(
 ```
 
 ```{r}
-value_to_plot <- py["value_table"] 
+value_to_plot <- py["value_table"] %>% 
+     filter(max(iteration) < 20 | 
+              iteration %% 3 == 0 | 
+              iteration == max(iteration))
 
 ggplot(value_to_plot) +
   geom_line(aes(x = supply, y = reward),
