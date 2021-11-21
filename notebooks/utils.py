@@ -152,12 +152,14 @@ def update_value_function(V, duals, alpha, monotone):
   
   # Maintain Mmnotonicity
   for node, v in duals.items():
+    V_update = V[node]
+    num_units = v["supply"]
+    max_value = max(list(V_update.keys()) + [num_units + 5]) + 1
     if monotone:
       for i in range(0, num_units):
-        V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
-      for i in range(num_units + 1, num_units + 10):
         V_update[i] = max(V_update[num_units], V_update.get(i, 0))
-
+      for i in range(num_units + 1, max_value):
+        V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
 
 
 def solution_to_df(solution, num_iteration=None):
