@@ -114,10 +114,17 @@ def optimization_step(supply, demand, allowed_blood_transfers,
       b[k]= v + 1
       b['sink']-= 1
       sol = solve_network(nodes, b, arcs, upper, reward)
-      duals[k] = {"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}
+      duals[k] = duals.get(k,[]) + [{"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}]
       b[k] = v
       b['sink']+= 1
-    
+      if v - 1 >= 0:
+        b[k]= v - 1
+        b['sink']+= 1
+        sol = solve_network(nodes, b, arcs, upper, reward)
+        duals[k] = duals.get(k,[]) + [{"dual": base_solution["cost"] - sol["cost"], "supply": v}]
+        b[k] = v
+        b['sink']-= 1
+
   return base_solution, reward, duals
 
 
@@ -145,21 +152,23 @@ def transition_function(_inventory, _donations,
 def update_value_function(V, duals, alpha, monotone):
   """ Update value functions and maintain monotonicity """
   # Update Value function with duals (v)
-  for node, v in duals.items():
+  for node, dual_list in duals.items():
     V_update = V[node]
-    num_units = v["supply"]
-    V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]  
+    for v in dual_list:
+      num_units = v["supply"]
+      V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]  
   
   # Maintain Mmnotonicity
-  for node, v in duals.items():
+  for node, dual_list in duals.items():
     V_update = V[node]
-    num_units = v["supply"]
-    max_value = max(list(V_update.keys()) + [num_units + 5]) + 1
-    if monotone:
-      for i in range(0, num_units):
-        V_update[i] = max(V_update[num_units], V_update.get(i, 0))
-      for i in range(num_units + 1, max_value):
-        V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
+    for v in dual_list:
+      num_units = v["supply"]
+      max_value = max(list(V_update.keys()) + [num_units + 5]) + 1
+      if monotone:
+        for i in range(0, num_units):
+          V_update[i] = max(V_update[num_units], V_update.get(i, 0))
+        for i in range(num_units + 1, max_value):
+          V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
 
 
 def solution_to_df(solution, num_iteration=None):
