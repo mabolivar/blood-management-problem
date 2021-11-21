@@ -26,6 +26,7 @@ library("reticulate") # https://rstudio.github.io/reticulate/index.html
 ```{python packages}
 import pandas as pd
 from math import ceil
+from copy import deepcopy
 from ortools.linear_solver import pywraplp
 from notebooks.utils import (
   optimization_step, 
@@ -113,6 +114,7 @@ monotone_enabled = r["monotone_enabled"]
 num_epochs = r["num_epochs"]
 total_iterations = 20
 total_rewards = [0] * total_iterations
+value_function_path = [dict()] * total_iterations
 iteration_solutions = [
   {epoch: dict() for epoch in range(num_epochs)} 
   for _ in range(total_iterations)
@@ -122,6 +124,29 @@ V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(num_epochs)}
 ```
 
 ## n-st iteration
+
+```{python}
+def update_value_function_deprecated(V, duals, alpha, monotone):
+  """ Update value functions and maintain monotonicity """
+  # Update Value function with duals (v)
+  for node, v in duals.items():
+    V_update = V[node]
+    num_units = v["supply"]
+    V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]  
+  
+  # Maintain Mmnotonicity
+  for node, v in duals.items():
+    V_update = V[node]
+    num_units = v["supply"]
+    max_value = max(list(V_update.keys()) + [num_units + 5]) + 1
+    if monotone:
+      for i in range(0, num_units):
+        V_update[i] = max(V_update[num_units], V_update.get(i, 0))
+      for i in range(num_units + 1, max_value):
+        V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
+
+```
+ 
 
 ```{python}
 for num_iteration in range(total_iterations):
@@ -153,7 +178,7 @@ for num_iteration in range(total_iterations):
       "actions": base_solution["actions"],
       "rewards": reward
       }
-  
+  value_function_path[num_iteration] = deepcopy(V)
   print(total_rewards)
 
 ```
@@ -331,5 +356,33 @@ ggsave(glue("notebooks/figures/raw/{input_name}_{monotone_enabled}_plotting_{now
 ```
 ```{python}
   print(total_rewards)
+```
+```{python}
+tupled_data = [(i, epoch, node, supply_value, reward) for i, V in enumerate(value_function_path)
+  for epoch, piecewise in V.items()
+  for node, supply in piecewise.items()
+  for supply_value, reward in supply.items()]
+
+value_table = pd.DataFrame(
+              data=tupled_data, 
+              columns=["iteration", "epoch", "node", "supply", "reward"]
+              ).assign(
+                node = lambda x: x.node.astype(str),
+                supply = lambda x: x.supply.astype(float),
+                reward = lambda x: x.reward.astype(float),
+                )
+
+```
+
+```{r}
+value_to_plot <- py["value_table"] 
+
+ggplot(value_to_plot) +
+  geom_line(aes(x = supply, y = reward),
+            size = 1) +
+  facet_grid(epoch + node ~ iteration, scales = "fixed") +
+  labs(title = "Piecewise function per node and epoch") +
+  theme_get()
+
 ```
 
