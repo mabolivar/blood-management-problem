@@ -117,7 +117,7 @@ def optimization_step(supply, demand, allowed_blood_transfers,
       duals[k] = duals.get(k,[]) + [{"dual": sol["cost"] - base_solution["cost"], "supply": v + 1}]
       b[k] = v
       b['sink']+= 1
-      if v - 1 >= 0 and True:
+      if v - 1 >= 0:
         b[k]= v - 1
         b['sink']+= 1
         sol = solve_network(nodes, b, arcs, upper, reward)
