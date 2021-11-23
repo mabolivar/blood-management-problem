@@ -35,6 +35,7 @@ class Scenario(object):
 
         self.reward_map = self.get_epoch_reward_map()
         self.to_visualize = index < params['scenarios_to_visualize']
+        self.verbose = params["verbose"]
         self.network = self.generate_network()
         self.perfect_solution_reward, self.perfect_solution = self.get_perfect_information_solution()
         if self.perfect_solution and self.to_visualize:
