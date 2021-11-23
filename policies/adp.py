@@ -88,20 +88,21 @@ class VFA(Policy):
         delta = ceil(10 * (1 - (self.num_iteration + 1) / self.total_iterations))
         if prev_epoch < 0:
             return
-        for node, values in slopes.items():
+        for node, node_slopes in slopes.items():
             blood_type = node[0]
             prev_age = node[1] - 1
-            units = values["supply"] + 1
+            for values in node_slopes:
+                units = values["supply"] + 1
 
-            update_range = range(max(0, units - delta), units + delta + 1)
-            for unit in update_range:
-                V_unit_history = self.V_history[prev_epoch][(blood_type, prev_age)]
-                prev_V = self.V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
-                self.V[prev_epoch][(blood_type, prev_age)][unit] = min(
-                    self.V[prev_epoch][(blood_type, prev_age)].get(unit - 1, 99999999) - 0.5,
-                    (1 - alpha) * prev_V + alpha * values['slope'])
-                V_unit_history[unit] = V_unit_history.get(unit, []) + [
-                    (self.num_iteration, self.V[prev_epoch][(blood_type, prev_age)][unit])]
+                update_range = range(max(0, units - delta), units + delta + 1)
+                for unit in update_range:
+                    V_unit_history = self.V_history[prev_epoch][(blood_type, prev_age)]
+                    prev_V = self.V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
+                    self.V[prev_epoch][(blood_type, prev_age)][unit] = min(
+                        self.V[prev_epoch][(blood_type, prev_age)].get(unit - 1, 99999999) - 0.5,
+                        (1 - alpha) * prev_V + alpha * values['slope'])
+                    V_unit_history[unit] = V_unit_history.get(unit, []) + [
+                        (self.num_iteration, self.V[prev_epoch][(blood_type, prev_age)][unit])]
 
     def solve(self, epoch: int, supply: dict, demand: dict, reward_map: dict,
               allowed_blood_transfers,
@@ -179,8 +180,8 @@ class VFA(Policy):
                      if solver_status == pywraplp.Solver.OPTIMAL else None),
             'status': solver_status,
             'slopes': {
-                node: {'slope': self.mip_solver.LookupConstraint(str(node)).DualValue(),
-                       "supply": b}
+                node: [{'slope': self.mip_solver.LookupConstraint(str(node)).DualValue(),
+                       "supply": b}]
                 for node, b in supply.items() if node[1] > 0
             }
         }
