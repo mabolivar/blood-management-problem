@@ -81,11 +81,11 @@ def policy_evaluation(policy, scenarios):
 
 if __name__ == "__main__":
     params = {
-        "policies": ["adp"],
+        "policies": ["myopic", "basic", "adp"],
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
-        "test_simulations": 10,
+        "test_simulations": 20,
         "baseline_gap": False,
         "verbose": True,
         "scenarios_to_visualize": 0,
