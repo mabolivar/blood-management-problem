@@ -52,14 +52,14 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
                                                      next_donations=scenario.donations[epoch],
                                                      next_demands=scenario.demands[epoch])
 
-    if scenario.to_visualize:
+    if scenario.verbose:
         gap = round(100 * (scenario.perfect_solution_reward - sum(policy_reward))/scenario.perfect_solution_reward, 1)
         print(f"Policy: {active_policy.name}"
               f" - Scenario: {scenario.index} - Reward: {sum(policy_reward)} "
               f"- Perfect reward: {scenario.perfect_solution_reward} "
               f"- Status: {status}",
               f" - Gap: {gap}%")
-
+    if scenario.to_visualize:
         scenario.export_solution(policy_name=active_policy.name,
                                  decisions=simulation_history)
 
@@ -81,13 +81,14 @@ def policy_evaluation(policy, scenarios):
 
 if __name__ == "__main__":
     params = {
-        "policies": ["basic", "myopic", "adp"],
+        "policies": ["myopic", "basic", "adp"],
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 100,
-        "test_simulations": 50,
+        "test_simulations": 20,
         "baseline_gap": False,
-        "scenarios_to_visualize": 0
+        "verbose": True,
+        "scenarios_to_visualize": 0,
     }
     params.update(load_params())
 

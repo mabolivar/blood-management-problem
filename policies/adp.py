@@ -24,7 +24,7 @@ class VFA(Policy):
         }
         self.V_history = {
             t: {
-                (b, age): {i: [0] for i in range(0, 30)}
+                (b, age): dict()
                 for b in args["blood_types"]
                 for age in range(args["max_age"])
             } for t in range(args["epochs"])
@@ -37,34 +37,71 @@ class VFA(Policy):
         demand_attributes: blood demand attributes (type, surgery, substitution)
         """
         # Decision (blood_type, age, (blood_type, surgery, substitution))
-        if state.epoch == 0:
-            self.num_iteration += 1
-
         solution = self.solve(state.epoch, state.supply, state.demands, reward_map,
                               allowed_blood_transfers,
                               print_solution=False, print_model=False)
-        self.update_value_estimates(
-            prev_epoch=state.epoch - 1,
-            dual_variables=solution['duals']
-        )
+        if state.epoch > 0:
+            slopes = self.compute_slopes(solution, state.epoch, state.supply, state.demands, reward_map,
+                                     allowed_blood_transfers)
+
+            self.update_value_estimates(
+                prev_epoch=state.epoch - 1,
+                slopes=slopes
+            )
         return solution['actions']
 
-    def update_value_estimates(self, prev_epoch: int, dual_variables: dict):
+    def compute_slopes(self, base_solution, epoch, base_supply, base_demands, reward_map, allowed_blood_transfers):
+        slope_steps = 1
+        supply = copy.deepcopy(base_supply)
+        slopes = {node: [] for node in supply.keys()}
+        for node in supply.keys():
+            if node[1] == 0:
+                continue
+
+            current_cost = base_solution["cost"]
+            # Compute positive slopes
+            for i in range(slope_steps):
+                supply[node] += 1
+                new_cost = self.solve(epoch, supply, base_demands, reward_map,
+                                 allowed_blood_transfers)["cost"]
+                slope = new_cost - current_cost
+                slopes[node].append({"slope": slope, "supply": supply[node]})
+                if slope == 0:
+                    break
+                current_cost = new_cost
+
+            # Compute negative slopes
+            supply[node] = base_supply[node]
+            current_cost = base_solution["cost"]
+            for i in range(slope_steps):
+                supply[node] -= 1
+                if supply[node] < 0:
+                    break
+                new_cost = self.solve(epoch, supply, base_demands, reward_map,
+                                 allowed_blood_transfers)["cost"]
+                slope = current_cost - new_cost
+                slopes[node].append({"slope": slope, "supply": supply[node] + 1})
+                current_cost = new_cost
+            supply[node] = base_supply[node]
+
+        return slopes
+
+    def update_value_estimates(self, prev_epoch: int, slopes: dict):
         alpha = ceil(0.5 * (1 - (self.num_iteration + 1) / self.total_iterations))
         delta = ceil(10 * (1 - (self.num_iteration + 1) / self.total_iterations))
         if prev_epoch < 0:
             return
-        for node, values in dual_variables.items():
+        for node, node_slopes in slopes.items():
             blood_type = node[0]
             prev_age = node[1] - 1
-            units = values["supply"] + 1
-
-            update_range = range(max(0, units - delta), units + delta + 1)
-            for unit in update_range:
+            for values in node_slopes:
+                unit = values["supply"]
                 prev_V = self.V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
-                self.V[prev_epoch][(blood_type, prev_age)][unit] = min(self.V[prev_epoch][(blood_type, prev_age)].get(unit - 1, 99999999) - 0.5, (1 - alpha) * prev_V + alpha * values['dual'])
+                self.V[prev_epoch][(blood_type, prev_age)][unit] = (1 - alpha) * prev_V + alpha * values['slope']
 
-                self.V_history[prev_epoch][(blood_type, prev_age)][unit].append((self.num_iteration, self.V[prev_epoch][(blood_type, prev_age)][unit]))
+                V_unit_history = self.V_history[prev_epoch][(blood_type, prev_age)]
+                V_unit_history[unit] = V_unit_history.get(unit, []) + [
+                    (self.num_iteration, self.V[prev_epoch][(blood_type, prev_age)][unit])]
 
     def solve(self, epoch: int, supply: dict, demand: dict, reward_map: dict,
               allowed_blood_transfers,
@@ -141,9 +178,9 @@ class VFA(Policy):
             'cost': (self.mip_solver.Objective().Value()
                      if solver_status == pywraplp.Solver.OPTIMAL else None),
             'status': solver_status,
-            'duals': {
-                node: {'dual': self.mip_solver.LookupConstraint(str(node)).DualValue(),
-                       "supply": b}
+            'slopes': {
+                node: [{'slope': self.mip_solver.LookupConstraint(str(node)).DualValue(),
+                       "supply": b}]
                 for node, b in supply.items() if node[1] > 0
             }
         }
