@@ -6,6 +6,7 @@ from policies.policy import Policy
 
 
 def single_update_algorithm(V, prev_epoch, slopes, alpha, delta):
+    """ Updates the given slopes """
     for node, node_slopes in slopes.items():
         blood_type = node[0]
         prev_age = node[1] - 1
@@ -17,6 +18,8 @@ def single_update_algorithm(V, prev_epoch, slopes, alpha, delta):
 
 
 def leveling_algorithm(V, prev_epoch, slopes, alpha, delta):
+    """ Levels up the slope functions to maintian monotonicity
+        based on latest updated slopes """
     for node, node_slopes in slopes.items():
         blood_type = node[0]
         prev_age = node[1] - 1
@@ -49,6 +52,8 @@ def leveling_algorithm(V, prev_epoch, slopes, alpha, delta):
 
 
 def cave_algorithm(V, prev_epoch, slopes, alpha, delta):
+    """ CAVE algorithm - Use input slopes to update nearby
+        supply values based on the delta param"""
     for node, node_slopes in slopes.items():
         blood_type = node[0]
         prev_age = node[1] - 1
