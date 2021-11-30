@@ -126,6 +126,46 @@ V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(num_epochs)}
 ## n-st iteration
 
 ```{python}
+def update_value_function_deprecated(V, duals, alpha, monotone):
+  """ Update value functions and maintain monotonicity """
+  # Update Value function with duals (v)
+  for node, dual_list in duals.items():
+    V_update = V[node]
+    for v in dual_list:
+      num_units = v["supply"]
+      V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]
+  
+  # Maintain Mmnotonicity
+  if monotone:
+    for node, dual_list in duals.items():
+      V_update = V[node]
+      delta = 5
+      prev_sloped_unit = 0
+      dual_list.sort(key=lambda x: 1 * x["supply"])
+      for v in dual_list:
+        num_units = v["supply"]
+        v_ref = V_update[num_units]
+        lower_range = range(max(prev_sloped_unit + 1, num_units - delta), num_units + 1)
+        max_value = max(list(V_update.keys()) + [num_units + delta]) + 1
+        upper_range = range(num_units + 1, max_value)
+        for unit in lower_range:
+            prev_V = V_update.get(unit, 0)
+            if v_ref < prev_V:
+                break
+            V_update[unit] = v_ref
+        
+        for unit in upper_range:
+          prev_V = V_update.get(unit, v_ref)
+          if v_ref > prev_V:
+            break
+          V_update[unit] = v_ref
+        
+        prev_sloped_unit = num_units
+
+```
+
+
+```{python}
 for num_iteration in range(total_iterations):
   last_epoch_inventory = dict()
   for epoch in range(num_epochs):
@@ -144,7 +184,7 @@ for num_iteration in range(total_iterations):
     if epoch > 0:
       # Update value function
       alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
-      update_value_function(V[epoch - 1], duals, alpha, monotone=monotone_enabled)
+      update_value_function_deprecated(V[epoch - 1], duals, alpha, monotone=monotone_enabled)
       
     last_epoch_inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0)
                  for s in supply}
@@ -356,10 +396,11 @@ value_table = pd.DataFrame(
 value_to_plot <- py["value_table"] %>% 
      filter(max(iteration) < 20 | 
               iteration %% 3 == 0 | 
-              iteration == max(iteration))
+              iteration == max(iteration)) %>% 
+  arrange(iteration, epoch, node, supply)
 
 ggplot(value_to_plot) +
-  geom_line(aes(x = supply, y = reward),
+  geom_path(aes(x = supply, y = reward),
             size = 1) +
   facet_grid(epoch + node ~ iteration, scales = "fixed") +
   labs(title = "Piecewise function per node and epoch") +
