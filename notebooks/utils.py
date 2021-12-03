@@ -149,26 +149,38 @@ def transition_function(_inventory, _donations,
   return supply, demand, allowed_blood_transfers, reward_map
 
 
-def update_value_function(V, duals, alpha, monotone):
+def update_value_function(V_epoch, duals, alpha, delta, monotone):
   """ Update value functions and maintain monotonicity """
   # Update Value function with duals (v)
   for node, dual_list in duals.items():
-    V_update = V[node]
+    V_update = V_epoch[node]
     for v in dual_list:
       num_units = v["supply"]
-      V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]  
+      V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]
   
-  # Maintain Mmnotonicity
-  for node, dual_list in duals.items():
-    V_update = V[node]
-    for v in dual_list:
-      num_units = v["supply"]
-      max_value = max(list(V_update.keys()) + [num_units + 5]) + 1
-      if monotone:
-        for i in range(0, num_units):
-          V_update[i] = max(V_update[num_units], V_update.get(i, 0))
-        for i in range(num_units + 1, max_value):
-          V_update[i] = min(V_update[num_units], V_update.get(i, V_update[num_units]))
+  # Maintain Monotonicity
+  if monotone:
+    for node, dual_list in duals.items():
+      V_update = V_epoch[node]
+      prev_sloped_unit = 0
+      dual_list.sort(key=lambda x: 1 * x["supply"])
+      for v in dual_list:
+        num_units = v["supply"]
+        v_ref = V_update[num_units]
+        lower_range = range(prev_sloped_unit + 1, num_units + 1)
+        max_value = max(list(V_update.keys()) + [num_units + delta]) + 1
+        upper_range = range(num_units + 1, max_value)
+        for unit in lower_range[::-1]:
+          current_V = V_update.get(unit, 0)
+          next_V = V_update.get(unit + 1, v_ref)
+          V_update[unit] = max((1-alpha) * current_V + (alpha) * v["dual"], next_V)
+        
+        for unit in upper_range:
+          current_V = V_update.get(unit, v_ref)
+          prev_V = V_update.get(unit - 1, v_ref)
+          V_update[unit] = min((1-alpha) * current_V + (alpha) * v["dual"], prev_V)
+        
+        prev_sloped_unit = num_units
 
 
 def solution_to_df(solution, num_iteration=None):

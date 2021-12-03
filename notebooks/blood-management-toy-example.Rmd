@@ -120,7 +120,7 @@ iteration_solutions = [
   for _ in range(total_iterations)
   ]
 blood_nodes = [tuple(k.split("_")) for k in r["donations"][0].keys()]
-V = {epoch: {b: dict() for b in blood_nodes} for epoch in range(num_epochs)}
+V = {epoch: {b: {i: 5 if epoch < num_epochs - 1 else 0 for i in range(1, 20)} for b in blood_nodes} for epoch in range(num_epochs)}
 ```
 
 ## n-st iteration
@@ -143,8 +143,9 @@ for num_iteration in range(total_iterations):
       
     if epoch > 0:
       # Update value function
-      alpha = ceil(0.5 * (1 - (num_iteration + 1) / total_iterations))
-      update_value_function(V[epoch - 1], duals, alpha, monotone=monotone_enabled)
+      alpha = 0.8 * (1 - (num_iteration + 1) / total_iterations)
+      delta = 5 # ceil(10 * (1 - (num_iteration + 1) / total_iterations))
+      update_value_function(V[epoch - 1], duals, alpha, delta, monotone=monotone_enabled)
       
     last_epoch_inventory = {s: base_solution["actions"].get((s, ("f", s[0], s[1])), 0)
                  for s in supply}
@@ -356,12 +357,13 @@ value_table = pd.DataFrame(
 value_to_plot <- py["value_table"] %>% 
      filter(max(iteration) < 20 | 
               iteration %% 3 == 0 | 
-              iteration == max(iteration))
+              iteration == max(iteration)) %>% 
+  arrange(iteration, epoch, node, supply)
 
 ggplot(value_to_plot) +
-  geom_line(aes(x = supply, y = reward),
+  geom_path(aes(x = supply, y = reward),
             size = 1) +
-  facet_grid(epoch + node ~ iteration, scales = "fixed") +
+  facet_grid(epoch + node ~ iteration, scales = "free_y") +
   labs(title = "Piecewise function per node and epoch") +
   theme_get()
 
