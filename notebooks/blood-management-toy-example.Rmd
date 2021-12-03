@@ -120,7 +120,7 @@ iteration_solutions = [
   for _ in range(total_iterations)
   ]
 blood_nodes = [tuple(k.split("_")) for k in r["donations"][0].keys()]
-V = {epoch: {b: {i: 20 if epoch < num_epochs - 1 else 0 for i in range(1, 20)} for b in blood_nodes} for epoch in range(num_epochs)}
+V = {epoch: {b: {i: 5 if epoch < num_epochs - 1 else 0 for i in range(1, 20)} for b in blood_nodes} for epoch in range(num_epochs)}
 ```
 
 ## n-st iteration
@@ -135,7 +135,7 @@ def update_value_function_deprecated(V_epoch, duals, alpha, delta, monotone):
       num_units = v["supply"]
       V_update[num_units] = (1-alpha) * (V_update.get(num_units, 0)) + (alpha) * v["dual"]
   
-  # Maintain Mmnotonicity
+  # Maintain Monotonicity
   if monotone:
     for node, dual_list in duals.items():
       V_update = V_epoch[node]
@@ -144,16 +144,18 @@ def update_value_function_deprecated(V_epoch, duals, alpha, delta, monotone):
       for v in dual_list:
         num_units = v["supply"]
         v_ref = V_update[num_units]
-        lower_range = range(max(prev_sloped_unit + 1, num_units - delta), num_units + 1)
+        lower_range = range(prev_sloped_unit + 1, num_units + 1)
         max_value = max(list(V_update.keys()) + [num_units + delta]) + 1
         upper_range = range(num_units + 1, max_value)
-        for unit in lower_range:
-          prev_V = V_update.get(unit, 0)
-          V_update[unit] = max((1-alpha) * prev_V + (alpha) * v["dual"], v_ref)
+        for unit in lower_range[::-1]:
+          current_V = V_update.get(unit, 0)
+          next_V = V_update.get(unit + 1, v_ref)
+          V_update[unit] = max((1-alpha) * current_V + (alpha) * v["dual"], next_V)
         
         for unit in upper_range:
-          prev_V = V_update.get(unit, v_ref)
-          V_update[unit] = min((1-alpha) * prev_V + (alpha) * v["dual"], v_ref)
+          current_V = V_update.get(unit, v_ref)
+          prev_V = V_update.get(unit - 1, v_ref)
+          V_update[unit] = min((1-alpha) * current_V + (alpha) * v["dual"], prev_V)
         
         prev_sloped_unit = num_units
 
@@ -398,7 +400,7 @@ value_to_plot <- py["value_table"] %>%
 ggplot(value_to_plot) +
   geom_path(aes(x = supply, y = reward),
             size = 1) +
-  facet_grid(epoch + node ~ iteration, scales = "fixed") +
+  facet_grid(epoch + node ~ iteration, scales = "free_y") +
   labs(title = "Piecewise function per node and epoch") +
   theme_get()
 
