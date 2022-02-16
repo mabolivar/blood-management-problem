@@ -1,3 +1,5 @@
+import csv
+import time
 import numpy as np
 from copy import deepcopy
 from simulator.scenario import Scenario
@@ -36,6 +38,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
     status = 'SOLVED'
     epoch = 0
     replica_state = State(epoch, scenario.init_blood_inventory, scenario.demands[epoch])
+    start = time.time()
     while epoch < scenario.num_epochs:  # Terminal test
         decisions = active_policy.get_actions(replica_state, scenario.reward_map,
                                               scenario.allowed_blood_transfers)
@@ -51,7 +54,7 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
             replica_state = replica_state.transition(post_decision_state,
                                                      next_donations=scenario.donations[epoch],
                                                      next_demands=scenario.demands[epoch])
-
+    end = time.time()
     if scenario.verbose:
         gap = round(100 * (scenario.perfect_solution_reward - sum(policy_reward))/scenario.perfect_solution_reward, 1)
         print(f"Policy: {active_policy.name}"
@@ -64,28 +67,32 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
                                  decisions=simulation_history)
 
     # print(simulation_history)
-    return sum(policy_reward), simulation_history, scenario.index
+    return sum(policy_reward), simulation_history, end - start
 
 
 def policy_evaluation(policy, scenarios):
+    performance = []    # Tuples with policy performance metrics
     rewards = []
     gaps = []
     n = len(scenarios)
     for scenario in scenarios:
-        reward, action_history, replica_id = run_simulation(scenario, policy)
+        reward, action_history, execution_seconds = run_simulation(scenario, policy)
         rewards.append(reward)
+        performance.append(
+            (policy.name, scenario.index, reward, scenario.perfect_solution_reward, execution_seconds)
+        )
         if scenario.perfect_solution_reward:
             gaps.append((scenario.perfect_solution_reward - reward)/scenario.perfect_solution_reward)
-    return sum(rewards)/n, sum(gaps)/n
+    return sum(rewards)/n, sum(gaps)/n, performance
 
 
 if __name__ == "__main__":
     params = {
-        "policies": ["myopic", "basic", "adp"],
+        "policies": ["myopic", "adp"],
         "train_seed": 9874,
         "test_seed": 7383,
-        "train_simulations": 100,
-        "test_simulations": 20,
+        "train_simulations": 20,
+        "test_simulations": 2,
         "baseline_gap": False,
         "verbose": True,
         "scenarios_to_visualize": 0,
@@ -96,12 +103,21 @@ if __name__ == "__main__":
     train_generator = np.random.RandomState(seed=params['train_seed'])    # Move into policy.train()?
     test_generator = np.random.RandomState(seed=params['test_seed'])
     test_scenarios = [Scenario(index, test_generator, params) for index in range(params["test_simulations"])]
+    policies_performance = [("policy", "scenario", "reward", "perfect_reward", "execution_secs")]
     for policy_name in params["policies"]:
         print(policy_name)
         policy = policy_map[policy_name](params)
         if policy.require_training:
             policy.train(train_generator)
 
-        avg_reward, avg_gap = policy_evaluation(policy, test_scenarios[::-1])
+        avg_reward, avg_gap, performance = policy_evaluation(policy, test_scenarios[::-1])
+        policies_performance = policies_performance + performance
         print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
+
+    # Export performance metrics
+    output_file = f"results/performance_sims_{params['test_simulations']}_{params['epochs']}_{params['max_age']}.csv"
+    with open(output_file, "w") as out:
+        csv_out = csv.writer(out, lineterminator='\n')
+        for row in policies_performance:
+            csv_out.writerow(row)
 
