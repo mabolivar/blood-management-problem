@@ -18,35 +18,36 @@ def single_update_algorithm(V, prev_epoch, slopes, alpha, delta):
 
 
 def leveling_algorithm(V, prev_epoch, slopes, alpha, delta):
-    """ Levels up the slope functions to maintian monotonicity
+    """ Levels up the slope functions to maintain monotonicity
         based on latest updated slopes """
     for node, node_slopes in slopes.items():
         blood_type = node[0]
         prev_age = node[1] - 1
-        node_slopes.sort(key=lambda x: -1 * x["supply"])
+        if prev_age < 0:
+            continue
+        node_slopes.sort(key=lambda x: 1 * x["supply"])
 
         for values in node_slopes:
             unit = values["supply"]
             prev_V = V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
             V[prev_epoch][(blood_type, prev_age)][unit] = (1 - alpha) * prev_V + alpha * values['slope']
 
+        V_update = V[prev_epoch][(blood_type, prev_age)]
         prev_sloped_unit = 0
         for values in node_slopes:
             units = values["supply"]
-            v_ref = V[prev_epoch][(blood_type, prev_age)][units]
-            lower_range = range(max(prev_sloped_unit + 1, units - delta), units + 1)
+            v_ref = V_update[units]
+            lower_range = range(prev_sloped_unit + 1, units + 1)
             upper_range = range(units + 1, units + delta + 1)
-            for unit in lower_range:
-                prev_V = V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
-                if v_ref < prev_V:
-                    break
-                V[prev_epoch][(blood_type, prev_age)][unit] = v_ref
+            for unit in lower_range[::-1]:
+                current_V = V_update.get(unit, 0)
+                next_V = V_update.get(unit + 1, v_ref)
+                V_update[unit] = max((1 - alpha) * current_V + alpha * values["slope"], next_V)
 
             for unit in upper_range:
-                prev_V = V[prev_epoch][(blood_type, prev_age)].get(unit, v_ref)
-                if v_ref > prev_V:
-                    break
-                V[prev_epoch][(blood_type, prev_age)][unit] = v_ref
+                current_V = V_update.get(unit, v_ref)
+                prev_V = V_update.get(unit - 1, v_ref)
+                V_update[unit] = min((1 - alpha) * current_V + alpha * values["slope"], prev_V)
 
             prev_sloped_unit = units
 
@@ -54,19 +55,8 @@ def leveling_algorithm(V, prev_epoch, slopes, alpha, delta):
 def cave_algorithm(V, prev_epoch, slopes, alpha, delta):
     """ CAVE algorithm - Use input slopes to update nearby
         supply values based on the delta param"""
-    for node, node_slopes in slopes.items():
-        blood_type = node[0]
-        prev_age = node[1] - 1
-        node_slopes.sort(key=lambda x: -1 * x["supply"])
-        prev_sloped_unit = 0
-        for values in node_slopes:
-            units = values["supply"]
-            update_range = range(max(prev_sloped_unit + 1, units - delta), units + delta + 1)
-            for unit in update_range:
-                prev_V = V[prev_epoch][(blood_type, prev_age)].get(unit, 0)
-                V[prev_epoch][(blood_type, prev_age)][unit] = (1 - alpha) * prev_V + alpha * values['slope']
+    pass
 
-            prev_sloped_unit = units
 
 class VFA(Policy):
     def __init__(self, args):
@@ -150,7 +140,7 @@ class VFA(Policy):
         return slopes
 
     def update_value_estimates(self, prev_epoch: int, slopes: dict):
-        alpha = ceil(0.5 * (1 - (self.num_iteration + 1) / self.total_iterations))
+        alpha = 0.8 * (1 - (self.num_iteration + 1) / self.total_iterations)
         delta = ceil(10 * (1 - (self.num_iteration + 1) / self.total_iterations))
         if prev_epoch < 0:
             return
