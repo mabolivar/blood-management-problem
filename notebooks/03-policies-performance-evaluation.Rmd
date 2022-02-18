@@ -1,0 +1,291 @@
+---
+title: "Policies performance evaluation"
+output: html_notebook
+---
+
+
+```{python packages}
+import numpy as np
+import pandas as pd
+from plotnine import *
+
+pd.set_option('display.max_columns', None)
+```
+
+## Formulas
+
+$$gap^\pi=\frac{reward^{perfect}-reward^\pi}{reward^{perfect}}$$
+
+```{python}
+file_paths = [
+  './results/performance_100_15_3.csv',
+  './results/performance_100_30_6.csv',
+  # './results/performance_100_15_6.csv',
+  # './results/performance_100_30_3.csv',
+  # './results/performance_350_15_3.csv',
+  # './results/performance_500_15_3.csv'
+  ]
+```
+
+
+
+```{python}
+def read_result_csv(filepath):
+  simulations, epochs, max_blood_age = filepath.removesuffix(".csv").split("_")[-3:]
+  data = (pd.read_csv(filepath)
+          .assign(
+            scenario=lambda x: max(x.scenario) - x.scenario + 1,
+            gap = lambda x: (x.perfect_reward - x.reward)/x.perfect_reward,
+            simulations = int(simulations),
+            epochs = int(epochs),
+            max_blood_age = int(max_blood_age),
+            instance = f"Epochs: {epochs} Max age: {max_blood_age}"
+            )
+          )
+  return data
+
+def percent_format(numbers, decimals=0):
+  return [f"{round(i*100, decimals)}%" for i in numbers]
+
+```
+
+
+```{python read-data}
+df = (
+  pd.concat([read_result_csv(file) for file in file_paths])
+  [lambda x: x.policy != "basic"]
+  )
+
+```
+
+## Performance per instance
+
+```{python}
+# Performance per instance amd policy
+overall_performance = (
+  df
+  .groupby(["instance", "policy"])
+  .agg(
+    {
+      "perfect_reward": ["mean"],
+      "reward": ["mean"],
+      "gap": ["mean"]
+      } 
+    )
+    .reset_index()
+)
+
+overall_performance
+```
+
+```{python results="asis"}
+# Gap over distances
+table = (
+  overall_performance[["instance", "policy", "gap"]]
+  .assign(gap=lambda x: percent_format(x.gap["mean"], 1))
+  .pivot(index=["instance"],columns=["policy"], values=["gap"])
+)
+print(table.to_markdown())
+```
+```{python}
+# Reward improvement vs Myopic policy
+(
+  overall_performance[["instance", "policy", "reward"]]
+  .pivot(index=["instance"],columns=["policy"], values=["reward"])
+  .assign(
+    gain=lambda x: percent_format((x.reward.vfa - x.reward.myopic)/x.reward.myopic, 1)
+  )
+)
+```
+
+## Performance evolution
+```{r fig.height=6, fig.width=12}
+
+```
+
+
+```{python fig.height=6, fig.width=12}
+plot_title = "Non-smoothed policy gap"
+(
+  ggplot(df)
+  + geom_line(aes(x="scenario", y="gap", color="policy"))
+  + facet_grid("instance ~ .")
+  + scale_y_continuous(labels=percent_format)
+  + labs(title=plot_title,
+         x="Scenarios",
+         y = "% gap to perfect solution")
+)
+
+```
+```{python fig.height=4, fig.width=8}
+smothing_obs = 3
+plot_title = f"Smoothed policy gap\n(Prev. obs: {smothing_obs})"
+to_plot = (df
+           .assign(
+             smooth_gap=lambda x: (
+               x.groupby(["instance", "policy"])
+               .gap
+               .transform(
+                 lambda x: (
+                   x.rolling(smothing_obs, min_periods=1).mean()
+                   )
+                 )
+               )
+             )
+          )
+
+(
+  ggplot(to_plot)
+  + geom_line(aes(x="scenario", y="smooth_gap", color="policy"))
+  + facet_grid("instance ~ .")
+  + scale_y_continuous(labels=percent_format)
+  + labs(title=plot_title,
+         x="# simulation",
+         y = "% gap to perfect solution")
+)
+```
+
+```{python fig.height=4, fig.width=8}
+smothing_obs = 5
+plot_title = f"Smoothed policy gap\n(Prev. obs: {smothing_obs})"
+to_plot = (df
+           .assign(
+             smooth_gap=lambda x: (
+               x.groupby(["instance", "policy"])
+               .gap
+               .transform(
+                 lambda x: (
+                   x.rolling(smothing_obs, min_periods=1).mean()
+                   )
+                 )
+               )
+             )
+          )
+
+(
+  ggplot(to_plot)
+  + geom_line(aes(x="scenario", y="smooth_gap", color="policy"))
+  + facet_grid("instance ~ .")
+  + scale_y_continuous(labels=percent_format)
+  + labs(title=plot_title,
+         x="# simulation",
+         y = "% gap to perfect solution")
+)
+```
+
+```{python}
+# Create Perfect policy dataframe
+perfect_policy = (
+  df[lambda x: x.policy == "myopic"]
+  .assign(
+    policy="perfect",
+    reward=lambda x: x.perfect_reward,
+    execution_secs=np.nan,
+    gap=0
+  )
+)
+
+```
+
+
+```{python}
+smothing_obs = 5
+plot_title = f"Non-smoothed policy's reward"
+to_plot = pd.concat([df, perfect_policy])
+
+(
+  ggplot(to_plot)
+  + geom_line(aes(x="scenario", y="reward", color="policy"))
+  + facet_grid("instance ~ .", scales="free_y")
+  + labs(title=plot_title)
+)
+```
+
+```{python}
+smothing_obs = 5
+plot_title = f"Smoothed policy's reward\n(Prev. obs: {smothing_obs})"
+to_plot = (
+  pd.concat([df, perfect_policy])
+  .reset_index(0,drop=True)
+  .assign(
+    smooth_reward=lambda x: (x.groupby('instance').reward.rolling(smothing_obs, min_periods=1).mean().reset_index(0,drop=True))
+    )
+  )
+  
+(
+  ggplot(to_plot)
+  + geom_line(aes(x="scenario", y="smooth_reward", color="policy"))
+  + facet_grid("instance ~ .", scales="free_y")
+  + labs(title=plot_title)
+)
+```
+```{python}
+
+xxx = (
+  df[["instance", "scenario", "policy", "reward"]]
+  .pivot_table(index=["instance", "scenario"],columns=["policy"], values=["reward"])
+  .reset_index()
+  .assign(
+    myopic=lambda x: x.reward.myopic,
+    vfa=lambda x: x.reward.vfa,
+    gain=lambda x: (x.reward.vfa - x.reward.myopic)/x.reward.myopic
+  )
+  .drop(columns=["reward"])
+  .T.unstack().T
+)
+xxx.columns
+```
+
+```{python results="asis"}
+table = (
+  xxx
+  .groupby("instance")
+  .agg(
+    {
+      "myopic":["mean"],
+      "vfa":["mean"],
+      "gain":["mean"]
+    }
+  )
+  .assign(gain=lambda x: percent_format(x.gain["mean"], 1))
+)
+print(table.to_markdown())
+```
+
+
+
+```{python fig.height=6, fig.width=12}
+# Reward gain vs Myopic policy evaluation
+smothing_obs = 5
+to_plot = (
+  df[["instance", "scenario", "policy", "reward"]]
+  .pivot(index=["instance", "scenario"],columns=["policy"], values=["reward"])
+  .sort_values(by=["instance", "scenario"])
+  .assign(
+    gain=lambda x: (x.reward.vfa - x.reward.myopic)/x.reward.myopic
+    )
+  .assign(
+    smooth_gain=lambda x: (
+               x.groupby(["instance"])
+               .gain
+               .transform(
+                 lambda x: (
+                   x.rolling(smothing_obs, min_periods=1).mean()
+                   )
+                   )
+                 )
+               )
+  .reset_index()
+)
+
+plot_title = f"Smoothed VFA gain vs. myopic policy (prev. obs: {smothing_obs})"
+(
+  ggplot(to_plot)
+  + geom_line(aes(x="scenario", y="smooth_gain", color="instance"))
+  # + facet_grid("instance ~ .")
+  + scale_y_continuous(labels=percent_format)
+  + labs(title=plot_title,
+        x="# simulation",
+        y="% reward increase")
+)
+```
