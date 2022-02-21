@@ -92,7 +92,7 @@ if __name__ == "__main__":
         "train_seed": 9874,
         "test_seed": 7383,
         "train_simulations": 20,
-        "test_simulations": 2,
+        "test_simulations": 100,
         "baseline_gap": False,
         "verbose": True,
         "scenarios_to_visualize": 0,
@@ -115,9 +115,8 @@ if __name__ == "__main__":
         print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
 
     # Export performance metrics
-    output_file = f"results/performance_sims_{params['test_simulations']}_{params['epochs']}_{params['max_age']}.csv"
+    output_file = f"results/performance_{params['test_simulations']}_{params['epochs']}_{params['max_age']}.csv"
     with open(output_file, "w") as out:
         csv_out = csv.writer(out, lineterminator='\n')
         for row in policies_performance:
             csv_out.writerow(row)
-

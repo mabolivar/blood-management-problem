@@ -254,7 +254,7 @@ print(table.to_markdown())
 
 
 
-```{python fig.height=6, fig.width=12}
+```{python fig.height=3, fig.width=6}
 # Reward gain vs Myopic policy evaluation
 smothing_obs = 5
 to_plot = (
@@ -284,8 +284,68 @@ plot_title = f"Smoothed VFA gain vs. myopic policy (prev. obs: {smothing_obs})"
   + geom_line(aes(x="scenario", y="smooth_gain", color="instance"))
   # + facet_grid("instance ~ .")
   + scale_y_continuous(labels=percent_format)
+  + scale_color_manual(values=["#E7B800", "#52854C"])
   + labs(title=plot_title,
         x="# simulation",
         y="% reward increase")
 )
 ```
+
+### Additional plots
+
+```{python}
+slopes = [(0,0),(1,20),(2,10),(3,3),(4,1),(5,0)]
+xy_ratio = 1/13.5
+piecewise_points = (
+  pd.DataFrame(slopes, columns=['quantity','slope'])
+  .assign(
+    reward=lambda x: x.slope.cumsum(),
+    pre_x=lambda x: x.quantity - 1,
+    pre_y=lambda x: x.reward - x.slope,
+    labelx=lambda x: x.quantity - 1/2,
+    labely=lambda x: x.slope.cumsum() - x.slope/2,
+    label_angle=lambda x: 180/np.pi * np.arctan(x.slope * xy_ratio),
+    slope_label=lambda x: x.quantity.apply(
+      lambda y: '$\\bar{v}_{tb}(' + str(y) + ')$'
+      )
+    )
+  )
+```
+
+```{python fig.height=3, fig.width=4}
+
+(
+  ggplot(data=piecewise_points) 
+  # + geom_point(aes(x='quantity',y='reward'))
+  + geom_line(aes(x='quantity',y='reward'))
+  + geom_segment(aes(x='quantity',y='pre_y',
+                  xend='quantity',yend='reward'),
+                  color='grey', linetype='dashed')
+  + geom_segment(
+    data=piecewise_points[lambda x: x.quantity > 0],
+    mapping=aes(
+        x='quantity',
+        y='pre_y',
+        xend='pre_x',
+        yend='pre_y'
+      ),
+      color='grey', linetype='dashed'
+    )
+  + geom_text(
+    data=piecewise_points[lambda x: x.quantity > 0],
+    mapping=aes(x='quantity', y='labely', 
+    # angle='label_angle',
+    label='slope_label'),
+    ha='left'
+    )
+  + scale_x_continuous(expand=(0,0,0,0.5))
+  + scale_y_continuous(expand=(0,0,0,5))
+  + labs(x='Quantity', y='$\\bar{V}_{tb}(R_{tb}^{x})$')
+  # + coord_fixed(ratio=xy_ratio)
+  + theme_classic()
+)
+```
+
+
+
+
