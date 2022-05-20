@@ -7,7 +7,7 @@ For more details about the problem details and policies, please refer to
 [How to solve Dynamic Resource Allocation problems using RL](https://www.manuelbolivar.com/post/dynamic-resource-allocation/)
 blog post.
 
-This project was inspired by Powell's Approximate Dynamic Programing book []()
+This project was inspired by Warren Powell's [Approximate Dynamic Programing book](https://www.amazon.com/Approximate-Dynamic-Programmin-Probability-Statistics-dp-047060445X/dp/047060445X/)
 and the [wbpowell328/stochastic-optimization](https://github.com/wbpowell328/stochastic-optimization) repository.
 
 ## Setup
@@ -24,9 +24,12 @@ the simulation execution. The following params can use to trigger the execution:
 "test_seed": 7383,             # Random seed for reproducibility
 "test_simulations": 100,        # Number of simulations to run
 "verbose": True,                # Prints all scenarios' performance (reward and gap to perfect solution)
-"scenarios_to_visualize": 0,    # Number of scenarios to be graph at the `figures` folder
+"scenarios_to_visualize": 0,    # Number of scenarios to be graph and exported to the `figures` folder.
 ```
 
 ## Resources
 
-+ https://www.manuelbolivar.com/post/dynamic-resource-allocation/
++ [How to solve Dynamic Resource Allocation problems using RL](https://www.manuelbolivar.com/post/dynamic-resource-allocation/)
++ [ORF 411 - Sequential Decision Analytics and Modeling.](https://castlelab.princeton.edu/orf-411/) CastleLabs, Princeton.
++ [wbpowell328/stochastic-optimization](https://github.com/wbpowell328/stochastic-optimization) repository.
++ [Approximate Dynamic Programing book](https://www.amazon.com/Approximate-Dynamic-Programmin-Probability-Statistics-dp-047060445X/dp/047060445X/)
