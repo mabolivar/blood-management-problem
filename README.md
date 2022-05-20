@@ -25,7 +25,18 @@ the simulation execution. The following params can use to trigger the execution:
 "test_simulations": 100,        # Number of simulations to run
 "verbose": True,                # Prints all scenarios' performance (reward and gap to perfect solution)
 "scenarios_to_visualize": 0,    # Number of scenarios to be graph and exported to the `figures` folder.
+"instance_name": "epoch_15_age_3" # Instance name
 ```
+
+### Instances
+
+The instances are loaded or generated within the (parameters.py)[parameters.py] file.
+
+In case an instance named as the `instance_name`'s value already exists on the 
+(instances/)[instances] folder, it will be loaded. Otherwise, a new instance file 
+will be created within the (instances/)[instances] folder. This new instance will use the 
+default params defined at the (parameters.py)[parameters.py] file.
+Feel free to change the params to generate new instances.
 
 ## Resources
 

@@ -1,0 +1,181 @@
+{
+  "epochs": 30,
+  "max_age": 6,
+  "blood_types": [
+    "AB+",
+    "AB-",
+    "A+",
+    "A-",
+    "B+",
+    "B-",
+    "O+",
+    "O-"
+  ],
+  "num_blood_types": 8,
+  "allowed_transfers": [
+    [
+      "AB+",
+      "AB+"
+    ],
+    [
+      "AB-",
+      "AB+"
+    ],
+    [
+      "AB-",
+      "AB-"
+    ],
+    [
+      "A+",
+      "AB+"
+    ],
+    [
+      "A+",
+      "A+"
+    ],
+    [
+      "A-",
+      "AB+"
+    ],
+    [
+      "A-",
+      "AB-"
+    ],
+    [
+      "A-",
+      "A+"
+    ],
+    [
+      "A-",
+      "A-"
+    ],
+    [
+      "B+",
+      "AB+"
+    ],
+    [
+      "B+",
+      "B+"
+    ],
+    [
+      "B-",
+      "AB+"
+    ],
+    [
+      "B-",
+      "AB-"
+    ],
+    [
+      "B-",
+      "B+"
+    ],
+    [
+      "B-",
+      "B-"
+    ],
+    [
+      "O+",
+      "AB+"
+    ],
+    [
+      "O+",
+      "A+"
+    ],
+    [
+      "O+",
+      "B+"
+    ],
+    [
+      "O+",
+      "O+"
+    ],
+    [
+      "O-",
+      "AB+"
+    ],
+    [
+      "O-",
+      "A+"
+    ],
+    [
+      "O-",
+      "B+"
+    ],
+    [
+      "O-",
+      "O+"
+    ],
+    [
+      "O-",
+      "AB-"
+    ],
+    [
+      "O-",
+      "A-"
+    ],
+    [
+      "O-",
+      "B-"
+    ],
+    [
+      "O-",
+      "O-"
+    ]
+  ],
+  "surgery_types": [
+    "urgent",
+    "elective"
+  ],
+  "substitution": [
+    "true"
+  ],
+  "transfer_rewards": {
+    "INFEASIBLE_SUBSTITUTION_PENALTY": -50,
+    "NO_SUBSTITUTION_BONUS": 0,
+    "SUBSTITUTION_PENALTY": -10,
+    "SUBSTITUTION_O-": -10,
+    "URGENT_DEMAND_BONUS": 40,
+    "ELECTIVE_DEMAND_BONUS": 20,
+    "DISCARD_BLOOD_PENALTY": -10
+  },
+  "demand_means": {
+    "AB+": 3,
+    "AB-": 3,
+    "A+": 14,
+    "A-": 6,
+    "B+": 9,
+    "B-": 2,
+    "O+": 18,
+    "O-": 7
+  },
+  "donation_means": {
+    "AB+": 3,
+    "AB-": 3,
+    "A+": 12,
+    "A-": 6,
+    "B+": 8,
+    "B-": 2,
+    "O+": 14,
+    "O-": 7
+  },
+  "surgery_types_prop": {
+    "urgent": 0.3333333333333333,
+    "elective": 0.6666666666666667
+  },
+  "substitution_prop": {
+    "true": 1
+  },
+  "time_periods_surge": [
+    3,
+    6,
+    9,
+    12,
+    15,
+    18,
+    21,
+    24,
+    27
+  ],
+  "surge_prob": 0.7,
+  "surge_factor": 6
+}
