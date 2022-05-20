@@ -5,39 +5,9 @@ from collections import defaultdict
 INSTANCE_FOLDER = "instances/"
 
 
-def get_demand_means (blood_types, default_value):
-    demand_means = {k: default_value for k in blood_types}
-    # Set here demand by blood type (for blood types that are different than the params['DEFAULT_VALUE_DIST'])
-    demand_means['AB+'] = 3
-    demand_means['B+'] = 9
-    demand_means['O+'] = 18
-    demand_means['B-'] = 2
-    demand_means['AB-'] = 3
-    demand_means['A-'] = 6
-    demand_means['O-'] = 7
-    demand_means['A+'] = 14
-
-    return demand_means
-
-
-def get_donation_means(blood_types, default_value):
-    donation_means = {k: default_value for k in blood_types}
-    # Set here donation by blood type (for blood types that are different than the params['DEFAULT_VALUE_DIST'])
-    donation_means['AB+'] = 3
-    donation_means['B+'] = 8
-    donation_means['O+'] = 14
-    donation_means['B-'] = 2
-    donation_means['AB-'] = 3
-    donation_means['A-'] = 6
-    donation_means['O-'] = 7
-    donation_means['A+'] = 12
-
-    return donation_means
-
-
 def load_params(instance_name):
     os.makedirs(INSTANCE_FOLDER, exist_ok=True)
-    path = INSTANCE_FOLDER + instance_name +".json"
+    path = INSTANCE_FOLDER + instance_name + ".json"
     if os.path.exists(path):
         with open(path, "r") as json_file:
             params = json.load(json_file)
@@ -46,18 +16,12 @@ def load_params(instance_name):
     return clean_params(params)
 
 
-def clean_params(params: dict):
-    params["allowed_transfers"] = [tuple(x) for x in params["allowed_transfers"]]
-    params["blood_transfers"] = {(x, y): False for x in params['blood_types'] for y in params['blood_types']}
-    for v in params["allowed_transfers"]:
-        params["blood_transfers"][v] = True
-
-    params['time_periods_surge'] = set(params['time_periods_surge'])
-
-    return params
-
-
 def generate_params(output_path):
+    """
+    Generate and exports params
+    :param output_path: string
+    :return: dict - Parameters to be used for simulations
+    """
     params = defaultdict()
     params["epochs"] = 15
     params["max_age"] = 3
@@ -104,5 +68,51 @@ def generate_params(output_path):
     # Export params
     with open(output_path, "w") as json_file:
         json.dump(params, json_file, indent=2)
+
+    return params
+
+
+def get_demand_means (blood_types, default_value):
+    demand_means = {k: default_value for k in blood_types}
+    # Set here demand by blood type (for blood types that are different than the params['DEFAULT_VALUE_DIST'])
+    demand_means['AB+'] = 3
+    demand_means['B+'] = 9
+    demand_means['O+'] = 18
+    demand_means['B-'] = 2
+    demand_means['AB-'] = 3
+    demand_means['A-'] = 6
+    demand_means['O-'] = 7
+    demand_means['A+'] = 14
+
+    return demand_means
+
+
+def get_donation_means(blood_types, default_value):
+    donation_means = {k: default_value for k in blood_types}
+    # Set here donation by blood type (for blood types that are different than the params['DEFAULT_VALUE_DIST'])
+    donation_means['AB+'] = 3
+    donation_means['B+'] = 8
+    donation_means['O+'] = 14
+    donation_means['B-'] = 2
+    donation_means['AB-'] = 3
+    donation_means['A-'] = 6
+    donation_means['O-'] = 7
+    donation_means['A+'] = 12
+
+    return donation_means
+
+
+def clean_params(params: dict):
+    """
+    Properly format parameters to be use in the Simulator
+    :param params:
+    :return:
+    """
+    params["allowed_transfers"] = [tuple(x) for x in params["allowed_transfers"]]
+    params["blood_transfers"] = {(x, y): False for x in params['blood_types'] for y in params['blood_types']}
+    for v in params["allowed_transfers"]:
+        params["blood_transfers"][v] = True
+
+    params['time_periods_surge'] = set(params['time_periods_surge'])
 
     return params

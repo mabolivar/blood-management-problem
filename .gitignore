@@ -131,8 +131,11 @@ dmypy.json
 # Pycharm
 .idea/
 
-# Figures
+# Results and Figures
+results/
 figures/
+
+# R
 .Rproj.user
 .Renviron
 .Rhistory

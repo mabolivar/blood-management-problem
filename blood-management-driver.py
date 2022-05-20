@@ -1,3 +1,4 @@
+import os
 import csv
 import time
 import numpy as np
@@ -7,9 +8,10 @@ from policies.policy import Policy
 from policies.myopic import Myopic
 from policies.adp import VFA
 from policies.basic import Basic
-from instances.parameters import load_params
+from parameters import load_params
 
 policy_map = dict(basic=Basic, myopic=Myopic, adp=VFA)
+OUTPUT_FOLDER = 'results'
 
 
 def run_simulation(scenario: Scenario, active_policy: Policy):
@@ -69,7 +71,7 @@ if __name__ == "__main__":
     params = {
         "policies": ["myopic", "adp"],
         "test_seed": 7383,
-        "test_simulations": 10,
+        "test_simulations": 30,
         "verbose": True,
         "scenarios_to_visualize": 0,
         "instance_name": "epoch_15_age_3"
@@ -88,7 +90,8 @@ if __name__ == "__main__":
         print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
 
     # Export performance metrics
-    output_file = f"results/performance_{params['test_simulations']}_{params['epochs']}_{params['max_age']}.csv"
+    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    output_file = f"{OUTPUT_FOLDER}/performance_{params['test_simulations']}_{params['epochs']}_{params['max_age']}.csv"
     with open(output_file, "w") as out:
         csv_out = csv.writer(out, lineterminator='\n')
         for row in policies_performance:
