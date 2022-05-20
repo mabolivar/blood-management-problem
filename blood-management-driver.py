@@ -1,35 +1,15 @@
 import csv
 import time
 import numpy as np
-from copy import deepcopy
 from simulator.scenario import Scenario
 from simulator.state import State
 from policies.policy import Policy
 from policies.myopic import Myopic
 from policies.adp import VFA
 from policies.basic import Basic
-from utils import load_params
+from instances.parameters import load_params
 
 policy_map = dict(basic=Basic, myopic=Myopic, adp=VFA)
-
-
-def deprecated_compute_reward(decisions: dict, blood_transfers: dict, transfer_rewards: dict):
-    # decision ((blood_type, age), (blood_type, surgery, substitution))
-    value = 0
-    committed_decisions = {k: v for k, v in decisions.items() if v > 0}
-    for key, _ in committed_decisions.items():
-        supply_blood = key[0][0]
-        demand_blood, surgery, allowed_substitution = key[1]
-        if (not allowed_substitution and supply_blood != demand_blood) or \
-                (allowed_substitution and not blood_transfers[(supply_blood, demand_blood)]):
-            value += transfer_rewards["INFEASIBLE_SUBSTITUTION_PENALTY"]
-        else:
-            value += transfer_rewards["NO_SUBSTITUTION_BONUS"] if supply_blood == demand_blood \
-                else transfer_rewards["SUBSTITUTION_PENALTY"]
-            value += transfer_rewards["SUBSTITUTION_O-"] if supply_blood == "O-" else 0
-            value += transfer_rewards["URGENT_DEMAND_BONUS"] if surgery == "urgent" \
-                else transfer_rewards["ELECTIVE_DEMAND_BONUS"]
-    return value
 
 
 def run_simulation(scenario: Scenario, active_policy: Policy):
@@ -66,7 +46,6 @@ def run_simulation(scenario: Scenario, active_policy: Policy):
         scenario.export_solution(policy_name=active_policy.name,
                                  decisions=simulation_history)
 
-    # print(simulation_history)
     return sum(policy_reward), simulation_history, end - start
 
 
@@ -89,27 +68,21 @@ def policy_evaluation(policy, scenarios):
 if __name__ == "__main__":
     params = {
         "policies": ["myopic", "adp"],
-        "train_seed": 9874,
         "test_seed": 7383,
-        "train_simulations": 20,
-        "test_simulations": 100,
-        "baseline_gap": False,
+        "test_simulations": 10,
         "verbose": True,
         "scenarios_to_visualize": 0,
+        "instance_name": "epoch_15_age_3"
     }
-    params.update(load_params())
+    params.update(load_params(params["instance_name"]))
 
     # Simulation replicas (for fare comparison)
-    train_generator = np.random.RandomState(seed=params['train_seed'])    # Move into policy.train()?
     test_generator = np.random.RandomState(seed=params['test_seed'])
     test_scenarios = [Scenario(index, test_generator, params) for index in range(params["test_simulations"])]
     policies_performance = [("policy", "scenario", "reward", "perfect_reward", "execution_secs")]
     for policy_name in params["policies"]:
         print(policy_name)
         policy = policy_map[policy_name](params)
-        if policy.require_training:
-            policy.train(train_generator)
-
         avg_reward, avg_gap, performance = policy_evaluation(policy, test_scenarios[::-1])
         policies_performance = policies_performance + performance
         print(f"Policy: {policy_name} | Avg. reward: {avg_reward} | gap: {(avg_gap * 100):.1f}%")
